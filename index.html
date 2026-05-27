@@ -27,6 +27,12 @@ h1{
     margin-bottom:40px;
 }
 
+.stats{
+    text-align:center;
+    margin-bottom:30px;
+    color:#94a3b8;
+}
+
 .gallery{
 
     display:grid;
@@ -70,16 +76,73 @@ h1{
     color:#cbd5e1;
 }
 
+.loader{
+    text-align:center;
+    padding:60px;
+}
+
 </style>
 
 </head>
 <body>
 
-<h1>CloudFront Image Gallery</h1>
+<h1>📸 CloudFront Image Gallery</h1>
 
-<div class="gallery" id="gallery">
-    <p style="color:#94a3b8;padding:60px;text-align:center">No images loaded.</p>
+<div class="stats" id="stats">
+Loading...
 </div>
+
+<div class="gallery" id="gallery"></div>
+
+<script>
+
+async function loadGallery(){
+
+    try{
+
+        const response =
+            await fetch("manifest.json");
+
+        const manifest =
+            await response.json();
+
+        document.getElementById("stats")
+            .innerText =
+            `${manifest.images.length} images • Generated ${manifest.generated_at}`;
+
+        const gallery =
+            document.getElementById("gallery");
+
+        manifest.images.forEach(image => {
+
+            const card =
+                document.createElement("div");
+
+            card.className = "card";
+
+            card.innerHTML = `
+                <img loading="lazy" src="${image}">
+                <div class="filename">${image}</div>
+            `;
+
+            gallery.appendChild(card);
+
+        });
+
+    }
+    catch(error){
+
+        document.getElementById("stats")
+            .innerText =
+            "Failed to load gallery.";
+
+        console.error(error);
+    }
+}
+
+loadGallery();
+
+</script>
 
 </body>
 </html>
