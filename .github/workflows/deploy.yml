@@ -42,8 +42,8 @@ jobs:
           aws s3 cp manifest.json s3://${{ secrets.S3_BUCKET }}/manifest.json \
             --cache-control "no-cache"
 
-      - name: Invalidate CloudFront
+      - name: Invalidate CloudFront cache for manifest and index
         run: |
           aws cloudfront create-invalidation \
             --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
-            --paths "/*"
+            --paths "/manifest.json" "/index.html"
