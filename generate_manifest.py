@@ -8,6 +8,7 @@ REGIONS = {
     'JP': 'Japan',
     'US': 'United States',
     'IN': 'India',
+    'NL': 'Netherlands',
 }
 
 def list_images(folder):
