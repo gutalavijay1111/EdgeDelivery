@@ -4,145 +4,303 @@
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
-<title>CloudFront Gallery</title>
+<title>EdgeDelivery</title>
 
 <style>
 
-*{
-    margin:0;
-    padding:0;
-    box-sizing:border-box;
-}
+*{ margin:0; padding:0; box-sizing:border-box; }
 
 body{
-    background:#0f172a;
+    background:#0a0f1e;
     color:white;
-    font-family:system-ui;
-    padding:40px;
+    font-family:system-ui,-apple-system,sans-serif;
+    min-height:100vh;
 }
 
-h1{
-    text-align:center;
-    margin-bottom:40px;
+/* ── Cache Inspector ── */
+
+.inspector{
+    background:#060b18;
+    border-bottom:1px solid #1a2236;
+    padding:12px 40px;
+    display:flex;
+    align-items:center;
+    gap:28px;
+    font-family:monospace;
+    font-size:0.75rem;
+    overflow-x:auto;
 }
 
-.stats{
-    text-align:center;
-    margin-bottom:30px;
-    color:#94a3b8;
+.inspector-item{
+    display:flex;
+    flex-direction:column;
+    gap:3px;
+    white-space:nowrap;
 }
 
-.gallery{
-
-    display:grid;
-
-    grid-template-columns:
-        repeat(auto-fill,minmax(300px,1fr));
-
-    gap:20px;
+.inspector-item .label{
+    color:#3d5278;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    font-size:0.65rem;
 }
+
+.inspector-item .val{ color:#8ba3c7; }
+
+.val.hit  { color:#22c55e; font-weight:600; }
+.val.miss { color:#f97316; font-weight:600; }
+
+.sep{
+    width:1px;
+    height:30px;
+    background:#1a2236;
+    flex-shrink:0;
+}
+
+/* ── Hero ── */
+
+.hero{
+    padding:48px 40px 8px;
+}
+
+.hero h1{
+    font-size:2rem;
+    font-weight:800;
+    letter-spacing:-0.02em;
+    color:#f1f5f9;
+}
+
+.hero .region-tag{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    margin-top:10px;
+    padding:4px 12px;
+    background:#0e2340;
+    border:1px solid #1e4080;
+    border-radius:4px;
+    font-size:0.78rem;
+    color:#60a5fa;
+    letter-spacing:0.04em;
+}
+
+.hero .meta{
+    margin-top:8px;
+    color:#374867;
+    font-size:0.8rem;
+}
+
+/* ── Carousel ── */
+
+.row{
+    padding:32px 0 8px;
+}
+
+.row-title{
+    padding:0 40px 14px;
+    font-size:1rem;
+    font-weight:600;
+    color:#cbd5e1;
+    letter-spacing:0.01em;
+}
+
+.track{
+    display:flex;
+    gap:10px;
+    overflow-x:auto;
+    padding:4px 40px 16px;
+    scrollbar-width:thin;
+    scrollbar-color:#1e293b transparent;
+}
+
+.track::-webkit-scrollbar{ height:3px; }
+.track::-webkit-scrollbar-thumb{ background:#1e293b; border-radius:2px; }
 
 .card{
-
+    flex:0 0 280px;
+    border-radius:10px;
     overflow:hidden;
-
-    border-radius:16px;
-
-    background:#111827;
-
-    transition:.3s;
+    background:#0f172a;
+    cursor:pointer;
+    transition:transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .card:hover{
-    transform:translateY(-5px);
+    transform:scale(1.05) translateY(-2px);
+    box-shadow:0 24px 48px rgba(0,0,0,0.6);
+    z-index:1;
+    position:relative;
 }
 
 .card img{
-
     width:100%;
-    height:250px;
-
+    height:170px;
     object-fit:cover;
-
     display:block;
 }
 
-.filename{
-
-    padding:12px;
-    font-size:.9rem;
-
-    color:#cbd5e1;
+.card-label{
+    padding:9px 12px;
+    font-size:0.72rem;
+    color:#475569;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
 }
 
-.loader{
-    text-align:center;
-    padding:60px;
+/* ── States ── */
+
+.empty{
+    padding:0 40px 32px;
+    color:#374867;
+    font-size:0.85rem;
+}
+
+.loading{
+    padding:80px 40px;
+    color:#374867;
+    font-size:0.85rem;
+}
+
+.error{
+    padding:40px;
+    color:#f87171;
+    font-size:0.85rem;
+    background:#1a0a0a;
+    border-radius:8px;
+    margin:40px;
 }
 
 </style>
-
 </head>
 <body>
 
-<h1>📸 CloudFront Image Gallery</h1>
-
-<div class="stats" id="stats">
-Loading...
+<!-- Cache Inspector -->
+<div class="inspector">
+    <div class="inspector-item">
+        <span class="label">Manifest Served</span>
+        <span class="val" id="i-file">—</span>
+    </div>
+    <div class="sep"></div>
+    <div class="inspector-item">
+        <span class="label">X-Cache</span>
+        <span class="val" id="i-cache">—</span>
+    </div>
+    <div class="sep"></div>
+    <div class="inspector-item">
+        <span class="label">Edge PoP</span>
+        <span class="val" id="i-pop">—</span>
+    </div>
+    <div class="sep"></div>
+    <div class="inspector-item">
+        <span class="label">Age</span>
+        <span class="val" id="i-age">—</span>
+    </div>
+    <div class="sep"></div>
+    <div class="inspector-item">
+        <span class="label">Cache-Control</span>
+        <span class="val" id="i-cc">—</span>
+    </div>
 </div>
 
-<div class="gallery" id="gallery"></div>
+<!-- Hero -->
+<div class="hero" id="hero">
+    <div class="loading">Loading...</div>
+</div>
+
+<!-- Carousel rows injected here -->
+<div id="content"></div>
 
 <script>
 
 async function loadGallery(){
-
     try{
 
-        const response =
-            await fetch("manifest.json");
+        const res      = await fetch('manifest.json');
+        const manifest = await res.json();
 
-        const manifest =
-            await response.json();
+        // ── Cache Inspector ──────────────────────────────────
+        const xCache = res.headers.get('x-cache')         || 'local';
+        const pop    = res.headers.get('x-amz-cf-pop')    || 'local';
+        const age    = res.headers.get('age');
+        const cc     = res.headers.get('cache-control')   || '—';
 
-        document.getElementById("stats")
-            .innerText =
-            `${manifest.images.length} images • Generated ${manifest.generated_at}`;
+        const fileLabel = manifest.region !== 'GLOBAL'
+            ? `manifest-${manifest.region}.json`
+            : 'manifest.json';
 
-        const gallery =
-            document.getElementById("gallery");
+        document.getElementById('i-file').textContent  = fileLabel;
+        document.getElementById('i-pop').textContent   = pop;
+        document.getElementById('i-age').textContent   = age ? `${age}s` : 'fresh';
+        document.getElementById('i-cc').textContent    = cc;
 
-        manifest.images.forEach(image => {
+        const cacheEl = document.getElementById('i-cache');
+        cacheEl.textContent = xCache;
+        if(xCache.toLowerCase().includes('hit'))       cacheEl.classList.add('hit');
+        else if(xCache.toLowerCase().includes('miss')) cacheEl.classList.add('miss');
 
-            const card =
-                document.createElement("div");
+        // ── Hero ─────────────────────────────────────────────
+        const regionLabel = manifest.region === 'GLOBAL'
+            ? 'Global — no Lambda@Edge routing detected'
+            : `Viewer routed to: ${manifest.region}`;
 
-            card.className = "card";
+        document.getElementById('hero').innerHTML = `
+            <h1>EdgeDelivery</h1>
+            <span class="region-tag">&#127758; ${regionLabel}</span>
+            <p class="meta">
+                ${manifest.images.length} images
+                &nbsp;·&nbsp;
+                Generated ${new Date(manifest.generated_at).toUTCString()}
+            </p>
+        `;
 
+        // ── Carousel ──────────────────────────────────────────
+        const content = document.getElementById('content');
+
+        if(!manifest.images.length){
+            content.innerHTML =
+                `<p class="empty">No images for this region yet — add files to data/${manifest.region}/ and redeploy.</p>`;
+            return;
+        }
+
+        const rowTitle = manifest.region === 'GLOBAL'
+            ? 'All Regions'
+            : `Trending in ${manifest.region_name}`;
+
+        const row   = document.createElement('div');
+        row.className = 'row';
+        row.innerHTML = `<div class="row-title">${rowTitle}</div>`;
+
+        const track = document.createElement('div');
+        track.className = 'track';
+
+        manifest.images.forEach(src => {
+            const name = src.split('/').pop();
+            const card = document.createElement('div');
+            card.className = 'card';
             card.innerHTML = `
-                <img loading="lazy" src="${image}">
-                <div class="filename">${image}</div>
+                <img loading="lazy" src="${src}" alt="${name}">
+                <div class="card-label">${name}</div>
             `;
-
-            gallery.appendChild(card);
-
+            track.appendChild(card);
         });
 
-    }
-    catch(error){
+        row.appendChild(track);
+        content.appendChild(row);
 
-        document.getElementById("stats")
-            .innerText =
-            "Failed to load gallery.";
-
-        console.error(error);
+    } catch(err){
+        document.getElementById('hero').innerHTML = '';
+        document.getElementById('content').innerHTML = `
+            <div class="error">
+                Failed to load manifest.json<br><br>
+                Local dev: run <code>python3 generate_manifest.py</code> then <code>python3 -m http.server 8000</code>
+            </div>`;
+        console.error(err);
     }
 }
 
 loadGallery();
 
 </script>
-
 </body>
 </html>
