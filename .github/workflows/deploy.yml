@@ -8,6 +8,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: Secret env
+
     steps:
       - uses: actions/checkout@v4
 
@@ -16,7 +17,7 @@ jobs:
         with:
           python-version: "3.x"
 
-      - name: Generate manifest.json
+      - name: Generate manifests for all regions
         run: python3 generate_manifest.py
 
       - name: Configure AWS credentials
@@ -26,24 +27,51 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Sync images to S3 with immutable cache headers
+      - name: Sync regional image folders to S3
         run: |
-          aws s3 sync data/ s3://${{ secrets.S3_BUCKET }}/data/ \
-            --cache-control "public,max-age=31536000,immutable" \
-            --delete
+          for region in JP US IN; do
+            if [ -d "data/$region" ]; then
+              aws s3 sync data/$region/ s3://${{ secrets.S3_BUCKET }}/data/$region/ \
+                --cache-control "public,max-age=31536000,immutable" \
+                --delete
+            fi
+          done
 
-      - name: Upload index.html with no-cache header
+      - name: Upload index.html
         run: |
           aws s3 cp index.html s3://${{ secrets.S3_BUCKET }}/index.html \
             --cache-control "no-cache"
 
-      - name: Upload manifest.json with no-cache header
+      - name: Upload all regional manifests
         run: |
+          for region in JP US IN; do
+            aws s3 cp manifest-$region.json s3://${{ secrets.S3_BUCKET }}/manifest-$region.json \
+              --cache-control "no-cache"
+          done
           aws s3 cp manifest.json s3://${{ secrets.S3_BUCKET }}/manifest.json \
             --cache-control "no-cache"
 
-      - name: Invalidate CloudFront cache for manifest and index
+      - name: Invalidate CloudFront cache
         run: |
           aws cloudfront create-invalidation \
             --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
-            --paths "/manifest.json" "/index.html"
+            --paths "/index.html" "/manifest.json" "/manifest-JP.json" "/manifest-US.json" "/manifest-IN.json"
+
+      - name: Smoke test — verify cache headers and post deploy summary
+        run: |
+          CF_DOMAIN=$(aws cloudfront get-distribution \
+            --id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --query 'Distribution.DomainName' --output text)
+
+          echo "## Deploy Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| | |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| **URL** | https://$CF_DOMAIN |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Time** | $(date -u) |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Cache headers — manifest.json (first hit after invalidation)" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          curl -sI "https://$CF_DOMAIN/manifest.json" \
+            | grep -iE "x-cache|x-amz-cf-pop|age|cache-control" >> $GITHUB_STEP_SUMMARY || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
