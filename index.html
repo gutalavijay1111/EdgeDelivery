@@ -1,198 +1,437 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EdgeDelivery</title>
 
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&display=swap" rel="stylesheet">
+
 <style>
+
+/* ── Tokens ── */
+
+:root{
+    --bg:           #fffdf2;
+    --bg-card:      #ffffff;
+    --bg-inspector: #F1E4DE;
+    --bg-modal:     #fffdf2;
+    --bg-btn:       #F1E4DE;
+    --bg-country:   #F1E4DE;
+
+    --border:       #e8d8d0;
+    --border-card:  #ede0d8;
+
+    --text:         #242523;
+    --text-muted:   #9a8f87;
+    --text-label:   #b0a098;
+    --text-val:     #4a4240;
+
+    --amber:        #dda15e;
+    --amber-dim:    rgba(221,161,94,0.15);
+    --amber-border: rgba(221,161,94,0.35);
+    --amber-dark:   #b8782a;
+
+    --purple:       #9D8DF1;
+
+    --hit:          #5a8a50;
+    --miss:         #c0622a;
+
+    --shadow:       0 2px 8px rgba(36,37,35,0.07), 0 8px 24px rgba(36,37,35,0.05);
+    --shadow-lg:    0 12px 40px rgba(36,37,35,0.15);
+}
+
+[data-theme="dark"]{
+    --bg:           #1c1a16;
+    --bg-card:      #1e1c18;
+    --bg-inspector: #161410;
+    --bg-modal:     #211f1b;
+    --bg-btn:       #2a2720;
+    --bg-country:   #18160f;
+
+    --border:       #352f26;
+    --border-card:  #2e2820;
+
+    --text:         #fffdf2;
+    --text-muted:   #6b6358;
+    --text-label:   #524d44;
+    --text-val:     #9e9080;
+
+    --amber:        #dda15e;
+    --amber-dim:    rgba(221,161,94,0.1);
+    --amber-border: rgba(221,161,94,0.22);
+    --amber-dark:   #dda15e;
+
+    --hit:          #7ab870;
+    --miss:         #e8845a;
+
+    --shadow:       none;
+    --shadow-lg:    0 24px 60px rgba(0,0,0,0.55);
+}
+
+/* ── Reset ── */
 
 *{ margin:0; padding:0; box-sizing:border-box; }
 
 body{
-    background:#0a0f1e;
-    color:white;
-    font-family:system-ui,-apple-system,sans-serif;
-    min-height:100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', system-ui, sans-serif;
+    min-height: 100vh;
+    transition: background 0.25s, color 0.25s;
+    overflow-x: hidden;
 }
 
-/* ── Country Picker Modal ── */
+/* ── Modal ── */
 
 .modal-bg{
-    position:fixed;
-    inset:0;
-    background:rgba(0,0,0,0.88);
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    z-index:200;
-    backdrop-filter:blur(6px);
+    position: fixed;
+    inset: 0;
+    background: rgba(36,37,35,0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 300;
+    backdrop-filter: blur(8px);
 }
 
-.modal-bg.hidden{ display:none; }
+.modal-bg.hidden{ display: none; }
 
 .modal{
-    background:#0d1526;
-    border:1px solid #1e2d47;
-    border-radius:18px;
-    padding:40px;
-    width:460px;
-    max-width:92vw;
+    background: var(--bg-modal);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 44px 40px 40px;
+    width: 480px;
+    max-width: 94vw;
+    box-shadow: var(--shadow-lg);
+}
+
+.modal-eyebrow{
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin-bottom: 6px;
 }
 
 .modal h2{
-    font-size:1.25rem;
-    font-weight:700;
-    color:#f1f5f9;
-    margin-bottom:6px;
-}
-
-.modal .sub{
-    color:#475569;
-    font-size:0.82rem;
-    margin-bottom:28px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 3rem;
+    letter-spacing: 0.02em;
+    color: var(--text);
+    line-height: 1;
+    margin-bottom: 28px;
 }
 
 .country-grid{
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:10px;
-    margin-bottom:10px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
 }
 
 .country-btn{
-    display:flex;
-    align-items:center;
-    gap:12px;
-    padding:14px 16px;
-    background:#060e1f;
-    border:1px solid #1a2844;
-    border-radius:10px;
-    cursor:pointer;
-    transition:border-color 0.15s, background 0.15s;
-    text-align:left;
-    color:inherit;
-    font-family:inherit;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 18px;
+    background: var(--bg-country);
+    border: 2px solid transparent;
+    border-radius: 14px;
+    cursor: pointer;
+    transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+    text-align: left;
+    color: inherit;
+    font-family: inherit;
+    position: relative;
+    overflow: hidden;
+}
+
+.country-btn::after{
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--amber);
+    opacity: 0;
+    transition: opacity 0.15s;
+    border-radius: inherit;
 }
 
 .country-btn:hover{
-    border-color:#3b82f6;
-    background:#0b1c38;
+    border-color: var(--amber);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px var(--amber-dim);
 }
 
-.country-btn.global{
-    grid-column:1 / -1;
+.country-btn.global{ grid-column: 1 / -1; }
+
+.flag{ font-size: 2rem; line-height: 1; position: relative; z-index: 1; }
+.country-btn .info{ display: flex; flex-direction: column; gap: 2px; position: relative; z-index: 1; }
+.country-btn .name{
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.15rem;
+    letter-spacing: 0.04em;
+    color: var(--text);
+    line-height: 1;
+}
+.country-btn .code{
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    font-family: monospace;
+    letter-spacing: 0.08em;
 }
 
-.flag{ font-size:1.8rem; line-height:1; }
+/* ── Top bar ── */
 
-.country-btn .info{ display:flex; flex-direction:column; gap:2px; }
-.country-btn .name{ font-size:0.9rem; font-weight:500; color:#e2e8f0; }
-.country-btn .code{ font-size:0.68rem; color:#3d5278; font-family:monospace; letter-spacing:0.06em; }
-
-/* ── Cache Inspector ── */
-
-.inspector{
-    background:#060b18;
-    border-bottom:1px solid #1a2236;
-    padding:12px 40px;
-    display:flex;
-    align-items:center;
-    gap:28px;
-    font-family:monospace;
-    font-size:0.75rem;
-    overflow-x:auto;
+.topbar{
+    background: var(--bg-inspector);
+    border-bottom: 1px solid var(--border);
+    padding: 9px 36px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    font-family: monospace;
+    font-size: 0.7rem;
+    overflow-x: auto;
+    scrollbar-width: none;
 }
 
-.inspector-item{ display:flex; flex-direction:column; gap:3px; white-space:nowrap; }
-.inspector-item .label{ color:#3d5278; text-transform:uppercase; letter-spacing:0.08em; font-size:0.65rem; }
-.inspector-item .val{ color:#8ba3c7; }
-.val.hit  { color:#22c55e; font-weight:600; }
-.val.miss { color:#f97316; font-weight:600; }
-.sep{ width:1px; height:30px; background:#1a2236; flex-shrink:0; }
+.topbar::-webkit-scrollbar{ display: none; }
+
+.inspector-item{ display: flex; flex-direction: column; gap: 2px; white-space: nowrap; }
+.inspector-item .label{
+    color: var(--text-label);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.58rem;
+}
+.inspector-item .val{ color: var(--text-val); }
+.val.hit  { color: var(--hit);  font-weight: 700; }
+.val.miss { color: var(--miss); font-weight: 700; }
+.sep{ width: 1px; height: 26px; background: var(--border); flex-shrink: 0; }
+.spacer{ flex: 1; min-width: 16px; }
+
+.theme-toggle{
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 14px;
+    background: var(--bg-btn);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    white-space: nowrap;
+    transition: border-color 0.15s, color 0.15s;
+    flex-shrink: 0;
+}
+
+.theme-toggle:hover{ border-color: var(--amber); color: var(--text); }
 
 /* ── Hero ── */
 
-.hero{ padding:48px 40px 8px; display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:16px; }
-
-.hero h1{ font-size:2rem; font-weight:800; letter-spacing:-0.02em; color:#f1f5f9; }
-
-.region-tag{
-    display:inline-flex;
-    align-items:center;
-    gap:6px;
-    margin-top:10px;
-    padding:4px 12px;
-    background:#0e2340;
-    border:1px solid #1e4080;
-    border-radius:4px;
-    font-size:0.78rem;
-    color:#60a5fa;
-    letter-spacing:0.04em;
+.hero{
+    padding: 52px 36px 0;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: end;
+    gap: 24px;
 }
 
-.hero .meta{ margin-top:8px; color:#374867; font-size:0.8rem; }
+.hero-left{ min-width: 0; }
+
+.hero-eyebrow{
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin-bottom: 4px;
+}
+
+.hero-title{
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(4rem, 10vw, 8rem);
+    line-height: 0.92;
+    letter-spacing: 0.01em;
+    color: var(--text);
+
+}
+
+.hero-title .accent{ color: var(--amber); }
+
+.hero-meta{
+    margin-top: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.region-badge{
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 14px;
+    background: var(--amber-dim);
+    border: 1px solid var(--amber-border);
+    border-radius: 100px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--amber-dark);
+}
+
+.meta-text{
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.hero-right{
+    padding-bottom: 4px;
+}
 
 .change-btn{
-    margin-top:48px;
-    padding:8px 18px;
-    background:transparent;
-    border:1px solid #1e2d47;
-    border-radius:8px;
-    color:#60a5fa;
-    font-size:0.8rem;
-    font-family:inherit;
-    cursor:pointer;
-    transition:border-color 0.15s;
-    white-space:nowrap;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: transparent;
+    border: 2px solid var(--border);
+    border-radius: 100px;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, transform 0.15s;
+    white-space: nowrap;
 }
 
-.change-btn:hover{ border-color:#3b82f6; }
+.change-btn:hover{
+    border-color: var(--amber);
+    color: var(--amber-dark);
+    transform: translateY(-1px);
+}
+
+/* ── Divider ── */
+
+.hero-divider{
+    height: 1px;
+    background: var(--border);
+    margin: 28px 36px 0;
+}
 
 /* ── Carousel ── */
 
-.row{ padding:32px 0 8px; }
+.row{ padding: 32px 0 4px; }
 
-.row-title{ padding:0 40px 14px; font-size:1rem; font-weight:600; color:#cbd5e1; letter-spacing:0.01em; }
-
-.track{
-    display:flex;
-    gap:10px;
-    overflow-x:auto;
-    padding:4px 40px 16px;
-    scrollbar-width:thin;
-    scrollbar-color:#1e293b transparent;
+.row-header{
+    padding: 0 36px 16px;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
 }
 
-.track::-webkit-scrollbar{ height:3px; }
-.track::-webkit-scrollbar-thumb{ background:#1e293b; border-radius:2px; }
+.row-title{
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2rem;
+    letter-spacing: 0.03em;
+    color: var(--text);
+    line-height: 1;
+}
+
+.row-count{
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.track{
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 14px;
+    overflow-x: auto;
+    padding: 6px 36px 20px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--amber) transparent;
+}
+
+.track::-webkit-scrollbar{ height: 3px; }
+.track::-webkit-scrollbar-thumb{ background: var(--amber); border-radius: 2px; }
 
 .card{
-    flex:0 0 280px;
-    border-radius:10px;
-    overflow:hidden;
-    background:#0f172a;
-    cursor:pointer;
-    transition:transform 0.2s ease, box-shadow 0.2s ease;
+    flex: 0 0 240px;
+    border-radius: 14px;
+    overflow: hidden;
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    cursor: pointer;
+    box-shadow: var(--shadow);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s;
+    transform-origin: bottom center;
 }
 
 .card:hover{
-    transform:scale(1.05) translateY(-2px);
-    box-shadow:0 24px 48px rgba(0,0,0,0.6);
-    z-index:1;
-    position:relative;
+    transform: scale(1.06) translateY(-6px) rotate(-0.8deg);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--amber);
 }
 
-.card img{ width:100%; height:170px; object-fit:cover; display:block; }
+.card:nth-child(even):hover{
+    transform: scale(1.06) translateY(-6px) rotate(0.8deg);
+}
 
-.card-label{ padding:9px 12px; font-size:0.72rem; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.card img{ width: 100%; height: 160px; object-fit: cover; display: block; }
+
+.card-label{
+    padding: 10px 12px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 
 /* ── States ── */
 
-.empty{ padding:0 40px 32px; color:#374867; font-size:0.85rem; }
-.loading{ padding:80px 40px; color:#374867; font-size:0.85rem; }
-.error{ padding:40px; color:#f87171; font-size:0.85rem; background:#1a0a0a; border-radius:8px; margin:40px; }
+.empty{
+    padding: 16px 36px 32px;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.loading{
+    padding: 80px 36px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2rem;
+    letter-spacing: 0.06em;
+    color: var(--border);
+}
+
+.error-block{
+    margin: 32px 36px;
+    padding: 28px;
+    background: var(--amber-dim);
+    border: 1px solid var(--amber-border);
+    border-radius: 14px;
+    font-size: 0.83rem;
+    color: var(--text);
+}
+
+.error-block code{
+    font-size: 0.78rem;
+    color: var(--amber-dark);
+}
 
 </style>
 </head>
@@ -201,26 +440,26 @@ body{
 <!-- Country Picker Modal -->
 <div class="modal-bg" id="modal-bg">
     <div class="modal">
-        <h2>Where are you watching from?</h2>
-        <p class="sub">We'll show you what's trending in your region.</p>
+        <p class="modal-eyebrow">EdgeDelivery</p>
+        <h2>Where are<br>you from?</h2>
         <div class="country-grid">
-            <button class="country-btn" data-code="JP" data-name="Japan">
+            <button class="country-btn" data-code="JP">
                 <span class="flag">&#127471;&#127477;</span>
                 <span class="info"><span class="name">Japan</span><span class="code">JP</span></span>
             </button>
-            <button class="country-btn" data-code="US" data-name="United States">
+            <button class="country-btn" data-code="US">
                 <span class="flag">&#127482;&#127480;</span>
                 <span class="info"><span class="name">United States</span><span class="code">US</span></span>
             </button>
-            <button class="country-btn" data-code="IN" data-name="India">
+            <button class="country-btn" data-code="IN">
                 <span class="flag">&#127470;&#127475;</span>
                 <span class="info"><span class="name">India</span><span class="code">IN</span></span>
             </button>
-            <button class="country-btn" data-code="NL" data-name="Netherlands">
+            <button class="country-btn" data-code="NL">
                 <span class="flag">&#127475;&#127473;</span>
-                <span class="info"><span class="name">Netherlands</span><span class="code">NL · VPN test</span></span>
+                <span class="info"><span class="name">Netherlands</span><span class="code">NL &middot; VPN test</span></span>
             </button>
-            <button class="country-btn global" data-code="GLOBAL" data-name="Global">
+            <button class="country-btn global" data-code="GLOBAL">
                 <span class="flag">&#127758;</span>
                 <span class="info"><span class="name">Global</span><span class="code">All regions</span></span>
             </button>
@@ -228,8 +467,8 @@ body{
     </div>
 </div>
 
-<!-- Cache Inspector -->
-<div class="inspector">
+<!-- Top bar -->
+<div class="topbar">
     <div class="inspector-item">
         <span class="label">Manifest</span>
         <span class="val" id="i-file">—</span>
@@ -254,15 +493,28 @@ body{
         <span class="label">Cache-Control</span>
         <span class="val" id="i-cc">—</span>
     </div>
+    <div class="spacer"></div>
+    <button class="theme-toggle" id="theme-toggle">
+        <span id="theme-icon">🌙</span>
+        <span id="theme-label">Dark</span>
+    </button>
 </div>
 
-<!-- Hero -->
-<div class="hero" id="hero">
-    <div class="loading">Loading...</div>
+<!-- Hero (injected by JS) -->
+<div id="hero">
+    <div class="hero">
+        <div class="hero-left">
+            <p class="hero-eyebrow">Content Delivery Network</p>
+            <h1 class="hero-title">EDGE<br><span class="accent">DELIVERY</span></h1>
+        </div>
+    </div>
+    <div class="hero-divider"></div>
 </div>
 
 <!-- Carousel rows -->
-<div id="content"></div>
+<div id="content">
+    <div class="loading">Loading...</div>
+</div>
 
 <script>
 
@@ -271,45 +523,55 @@ var REGIONS = {
     US:     { name: 'United States', flag: '🇺🇸', manifest: 'manifest-US.json' },
     IN:     { name: 'India',         flag: '🇮🇳', manifest: 'manifest-IN.json' },
     NL:     { name: 'Netherlands',   flag: '🇳🇱', manifest: 'manifest-NL.json' },
-    GLOBAL: { name: 'Global',        flag: '🌎', manifest: 'manifest.json' }
+    GLOBAL: { name: 'Global',        flag: '🌎',  manifest: 'manifest.json'    }
 };
 
-var STORAGE_KEY = 'edge-region';
+var REGION_KEY = 'edge-region';
+var THEME_KEY  = 'edge-theme';
 
-function getSavedRegion(){
-    return localStorage.getItem(STORAGE_KEY);
+/* ── Theme ── */
+
+function applyTheme(t){
+    document.documentElement.setAttribute('data-theme', t);
+    document.getElementById('theme-icon').textContent  = t === 'dark' ? '☀️' : '🌙';
+    document.getElementById('theme-label').textContent = t === 'dark' ? 'Light' : 'Dark';
+    localStorage.setItem(THEME_KEY, t);
 }
 
-function openModal(){
-    document.getElementById('modal-bg').classList.remove('hidden');
-}
+document.getElementById('theme-toggle').addEventListener('click', function(){
+    applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+});
 
-function closeModal(){
-    document.getElementById('modal-bg').classList.add('hidden');
-}
+applyTheme(localStorage.getItem(THEME_KEY) || 'light');
+
+/* ── Modal ── */
+
+function openModal(){  document.getElementById('modal-bg').classList.remove('hidden'); }
+function closeModal(){ document.getElementById('modal-bg').classList.add('hidden'); }
 
 document.querySelectorAll('.country-btn').forEach(function(btn){
     btn.addEventListener('click', function(){
         var code = btn.getAttribute('data-code');
-        localStorage.setItem(STORAGE_KEY, code);
+        localStorage.setItem(REGION_KEY, code);
         closeModal();
         loadGallery(code);
     });
 });
 
+/* ── Gallery ── */
+
 async function loadGallery(code){
 
-    var region  = REGIONS[code] || REGIONS.GLOBAL;
-    var url     = region.manifest;
+    var region = REGIONS[code] || REGIONS.GLOBAL;
+    var url    = region.manifest;
 
-    document.getElementById('hero').innerHTML    = '<div class="loading">Loading...</div>';
-    document.getElementById('content').innerHTML = '';
+    document.getElementById('content').innerHTML = '<div class="loading">Loading...</div>';
 
     try{
         var res      = await fetch(url);
         var manifest = await res.json();
 
-        // ── Cache Inspector ──
+        /* inspector */
         var xCache = res.headers.get('x-cache')       || 'local';
         var pop    = res.headers.get('x-amz-cf-pop')  || 'local';
         var age    = res.headers.get('age');
@@ -326,36 +588,46 @@ async function loadGallery(code){
         if(xCache.toLowerCase().includes('hit'))       cacheEl.classList.add('hit');
         else if(xCache.toLowerCase().includes('miss')) cacheEl.classList.add('miss');
 
-        // ── Hero ──
-        var rowTitle = code === 'GLOBAL'
-            ? 'All Regions'
-            : 'Trending in ' + region.name;
-
+        /* hero */
+        var trendLine = code === 'GLOBAL' ? 'ALL&nbsp;REGIONS' : 'TRENDING&nbsp;IN&nbsp;' + region.name.toUpperCase();
         document.getElementById('hero').innerHTML =
-            '<div>' +
-            '<h1>EdgeDelivery</h1>' +
-            '<span class="region-tag">' + region.flag + ' ' + region.name + '</span>' +
-            '<p class="meta">' + manifest.images.length + ' images' +
-            ' &nbsp;&middot;&nbsp; Generated ' + new Date(manifest.generated_at).toUTCString() +
-            '</p>' +
+            '<div class="hero">' +
+            '<div class="hero-left">' +
+            '<p class="hero-eyebrow">Content Delivery Network</p>' +
+            '<h1 class="hero-title">EDGE<br><span class="accent">DELIVERY</span></h1>' +
+            '<div class="hero-meta">' +
+            '<span class="region-badge">' + region.flag + '&nbsp;' + region.name + '</span>' +
+            '<span class="meta-text">' + manifest.images.length + ' images &middot; ' +
+            new Date(manifest.generated_at).toUTCString() + '</span>' +
             '</div>' +
-            '<button class="change-btn" id="change-region-btn">Change Region</button>';
+            '</div>' +
+            '<div class="hero-right">' +
+            '<button class="change-btn" id="change-btn">&#127757; Change Region</button>' +
+            '</div>' +
+            '</div>' +
+            '<div class="hero-divider"></div>';
 
-        document.getElementById('change-region-btn').addEventListener('click', openModal);
+        document.getElementById('change-btn').addEventListener('click', openModal);
 
-        // ── Carousel ──
+        /* carousel */
         var content = document.getElementById('content');
+        content.innerHTML = '';
 
         if(!manifest.images.length){
             content.innerHTML =
-                '<p class="empty">No images for this region yet — add files to data/' +
+                '<p class="empty">No images yet — drop files into data/' +
                 (code === 'GLOBAL' ? '' : code + '/') + ' and redeploy.</p>';
             return;
         }
 
-        var row   = document.createElement('div');
+        var row = document.createElement('div');
         row.className = 'row';
-        row.innerHTML = '<div class="row-title">' + rowTitle + '</div>';
+
+        var header = document.createElement('div');
+        header.className = 'row-header';
+        header.innerHTML =
+            '<span class="row-title">' + trendLine + '</span>' +
+            '<span class="row-count">' + manifest.images.length + ' titles</span>';
 
         var track = document.createElement('div');
         track.className = 'track';
@@ -370,22 +642,23 @@ async function loadGallery(code){
             track.appendChild(card);
         });
 
+        row.appendChild(header);
         row.appendChild(track);
         content.appendChild(row);
 
     } catch(err){
-        document.getElementById('hero').innerHTML = '';
         document.getElementById('content').innerHTML =
-            '<div class="error">' +
-            'Failed to load ' + url + '<br><br>' +
+            '<div class="error-block">' +
+            'Failed to load <code>' + url + '</code><br><br>' +
             'Local dev: <code>python3 generate_manifest.py &amp;&amp; python3 -m http.server 8000</code>' +
             '</div>';
         console.error(err);
     }
 }
 
-// ── Init ──
-var saved = getSavedRegion();
+/* ── Init ── */
+
+var saved = localStorage.getItem(REGION_KEY);
 if(saved && REGIONS[saved]){
     closeModal();
     loadGallery(saved);
