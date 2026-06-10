@@ -16,7 +16,10 @@ exports.handler = async (event) => {
     if (request.uri === '/manifest.json') {
         const countryHeader = request.headers['cloudfront-viewer-country'];
         const country = countryHeader?.[0]?.value;
-        request.uri = MANIFEST_MAP[country] ?? '/manifest.json';
+        const resolved = MANIFEST_MAP[country] ?? '/manifest.json';
+        console.log(request.headers);
+        console.log(`[geo-router] country=${country} uri=${resolved}`);
+        request.uri = resolved;
     }
 
     return request;
