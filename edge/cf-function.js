@@ -8,15 +8,24 @@ var MANIFEST_MAP = {
 function handler(event) {
     var request = event.request;
 
-    if (request.uri === '/manifest.json') {
-        // ?country=XX overrides geo-detection — useful for testing without VPN
-        var qs = request.querystring;
-        var override = qs && qs['country'] && qs['country'].value;
-
+    // Debug endpoint — visit /debug-country to see what CloudFront detects
+    if (request.uri === '/debug-country') {
         var countryHeader = request.headers['cloudfront-viewer-country'];
         var detected = countryHeader ? countryHeader.value : null;
+        return {
+            statusCode: 200,
+            headers: { 'content-type': { value: 'application/json' } },
+            body: JSON.stringify({
+                detected_country: detected,
+                in_manifest_map: !!(detected && MANIFEST_MAP[detected]),
+                would_serve: (detected && MANIFEST_MAP[detected]) || '/manifest.json',
+            }),
+        };
+    }
 
-        var country = override || detected;
+    if (request.uri === '/manifest.json') {
+        var countryHdr = request.headers['cloudfront-viewer-country'];
+        var country = countryHdr ? countryHdr.value : null;
         request.uri = (country && MANIFEST_MAP[country]) || '/manifest.json';
     }
 
