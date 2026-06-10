@@ -1,3 +1,5 @@
+// Just a script to run as CF-function 
+
 var MANIFEST_MAP = {
     JP: '/manifest-JP.json',
     US: '/manifest-US.json',

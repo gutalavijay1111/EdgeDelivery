@@ -17,6 +17,80 @@ body{
     min-height:100vh;
 }
 
+/* ── Country Picker Modal ── */
+
+.modal-bg{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.88);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index:200;
+    backdrop-filter:blur(6px);
+}
+
+.modal-bg.hidden{ display:none; }
+
+.modal{
+    background:#0d1526;
+    border:1px solid #1e2d47;
+    border-radius:18px;
+    padding:40px;
+    width:460px;
+    max-width:92vw;
+}
+
+.modal h2{
+    font-size:1.25rem;
+    font-weight:700;
+    color:#f1f5f9;
+    margin-bottom:6px;
+}
+
+.modal .sub{
+    color:#475569;
+    font-size:0.82rem;
+    margin-bottom:28px;
+}
+
+.country-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+    margin-bottom:10px;
+}
+
+.country-btn{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:14px 16px;
+    background:#060e1f;
+    border:1px solid #1a2844;
+    border-radius:10px;
+    cursor:pointer;
+    transition:border-color 0.15s, background 0.15s;
+    text-align:left;
+    color:inherit;
+    font-family:inherit;
+}
+
+.country-btn:hover{
+    border-color:#3b82f6;
+    background:#0b1c38;
+}
+
+.country-btn.global{
+    grid-column:1 / -1;
+}
+
+.flag{ font-size:1.8rem; line-height:1; }
+
+.country-btn .info{ display:flex; flex-direction:column; gap:2px; }
+.country-btn .name{ font-size:0.9rem; font-weight:500; color:#e2e8f0; }
+.country-btn .code{ font-size:0.68rem; color:#3d5278; font-family:monospace; letter-spacing:0.06em; }
+
 /* ── Cache Inspector ── */
 
 .inspector{
@@ -31,46 +105,20 @@ body{
     overflow-x:auto;
 }
 
-.inspector-item{
-    display:flex;
-    flex-direction:column;
-    gap:3px;
-    white-space:nowrap;
-}
-
-.inspector-item .label{
-    color:#3d5278;
-    text-transform:uppercase;
-    letter-spacing:0.08em;
-    font-size:0.65rem;
-}
-
+.inspector-item{ display:flex; flex-direction:column; gap:3px; white-space:nowrap; }
+.inspector-item .label{ color:#3d5278; text-transform:uppercase; letter-spacing:0.08em; font-size:0.65rem; }
 .inspector-item .val{ color:#8ba3c7; }
-
 .val.hit  { color:#22c55e; font-weight:600; }
 .val.miss { color:#f97316; font-weight:600; }
-
-.sep{
-    width:1px;
-    height:30px;
-    background:#1a2236;
-    flex-shrink:0;
-}
+.sep{ width:1px; height:30px; background:#1a2236; flex-shrink:0; }
 
 /* ── Hero ── */
 
-.hero{
-    padding:48px 40px 8px;
-}
+.hero{ padding:48px 40px 8px; display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:16px; }
 
-.hero h1{
-    font-size:2rem;
-    font-weight:800;
-    letter-spacing:-0.02em;
-    color:#f1f5f9;
-}
+.hero h1{ font-size:2rem; font-weight:800; letter-spacing:-0.02em; color:#f1f5f9; }
 
-.hero .region-tag{
+.region-tag{
     display:inline-flex;
     align-items:center;
     gap:6px;
@@ -84,25 +132,29 @@ body{
     letter-spacing:0.04em;
 }
 
-.hero .meta{
-    margin-top:8px;
-    color:#374867;
+.hero .meta{ margin-top:8px; color:#374867; font-size:0.8rem; }
+
+.change-btn{
+    margin-top:48px;
+    padding:8px 18px;
+    background:transparent;
+    border:1px solid #1e2d47;
+    border-radius:8px;
+    color:#60a5fa;
     font-size:0.8rem;
+    font-family:inherit;
+    cursor:pointer;
+    transition:border-color 0.15s;
+    white-space:nowrap;
 }
+
+.change-btn:hover{ border-color:#3b82f6; }
 
 /* ── Carousel ── */
 
-.row{
-    padding:32px 0 8px;
-}
+.row{ padding:32px 0 8px; }
 
-.row-title{
-    padding:0 40px 14px;
-    font-size:1rem;
-    font-weight:600;
-    color:#cbd5e1;
-    letter-spacing:0.01em;
-}
+.row-title{ padding:0 40px 14px; font-size:1rem; font-weight:600; color:#cbd5e1; letter-spacing:0.01em; }
 
 .track{
     display:flex;
@@ -132,53 +184,54 @@ body{
     position:relative;
 }
 
-.card img{
-    width:100%;
-    height:170px;
-    object-fit:cover;
-    display:block;
-}
+.card img{ width:100%; height:170px; object-fit:cover; display:block; }
 
-.card-label{
-    padding:9px 12px;
-    font-size:0.72rem;
-    color:#475569;
-    white-space:nowrap;
-    overflow:hidden;
-    text-overflow:ellipsis;
-}
+.card-label{ padding:9px 12px; font-size:0.72rem; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
 /* ── States ── */
 
-.empty{
-    padding:0 40px 32px;
-    color:#374867;
-    font-size:0.85rem;
-}
-
-.loading{
-    padding:80px 40px;
-    color:#374867;
-    font-size:0.85rem;
-}
-
-.error{
-    padding:40px;
-    color:#f87171;
-    font-size:0.85rem;
-    background:#1a0a0a;
-    border-radius:8px;
-    margin:40px;
-}
+.empty{ padding:0 40px 32px; color:#374867; font-size:0.85rem; }
+.loading{ padding:80px 40px; color:#374867; font-size:0.85rem; }
+.error{ padding:40px; color:#f87171; font-size:0.85rem; background:#1a0a0a; border-radius:8px; margin:40px; }
 
 </style>
 </head>
 <body>
 
+<!-- Country Picker Modal -->
+<div class="modal-bg" id="modal-bg">
+    <div class="modal">
+        <h2>Where are you watching from?</h2>
+        <p class="sub">We'll show you what's trending in your region.</p>
+        <div class="country-grid">
+            <button class="country-btn" data-code="JP" data-name="Japan">
+                <span class="flag">&#127471;&#127477;</span>
+                <span class="info"><span class="name">Japan</span><span class="code">JP</span></span>
+            </button>
+            <button class="country-btn" data-code="US" data-name="United States">
+                <span class="flag">&#127482;&#127480;</span>
+                <span class="info"><span class="name">United States</span><span class="code">US</span></span>
+            </button>
+            <button class="country-btn" data-code="IN" data-name="India">
+                <span class="flag">&#127470;&#127475;</span>
+                <span class="info"><span class="name">India</span><span class="code">IN</span></span>
+            </button>
+            <button class="country-btn" data-code="NL" data-name="Netherlands">
+                <span class="flag">&#127475;&#127473;</span>
+                <span class="info"><span class="name">Netherlands</span><span class="code">NL · VPN test</span></span>
+            </button>
+            <button class="country-btn global" data-code="GLOBAL" data-name="Global">
+                <span class="flag">&#127758;</span>
+                <span class="info"><span class="name">Global</span><span class="code">All regions</span></span>
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- Cache Inspector -->
 <div class="inspector">
     <div class="inspector-item">
-        <span class="label">Manifest Served</span>
+        <span class="label">Manifest</span>
         <span class="val" id="i-file">—</span>
     </div>
     <div class="sep"></div>
@@ -208,80 +261,112 @@ body{
     <div class="loading">Loading...</div>
 </div>
 
-<!-- Carousel rows injected here -->
+<!-- Carousel rows -->
 <div id="content"></div>
 
 <script>
 
-async function loadGallery(){
+var REGIONS = {
+    JP:     { name: 'Japan',         flag: '🇯🇵', manifest: 'manifest-JP.json' },
+    US:     { name: 'United States', flag: '🇺🇸', manifest: 'manifest-US.json' },
+    IN:     { name: 'India',         flag: '🇮🇳', manifest: 'manifest-IN.json' },
+    NL:     { name: 'Netherlands',   flag: '🇳🇱', manifest: 'manifest-NL.json' },
+    GLOBAL: { name: 'Global',        flag: '🌎', manifest: 'manifest.json' }
+};
+
+var STORAGE_KEY = 'edge-region';
+
+function getSavedRegion(){
+    return localStorage.getItem(STORAGE_KEY);
+}
+
+function openModal(){
+    document.getElementById('modal-bg').classList.remove('hidden');
+}
+
+function closeModal(){
+    document.getElementById('modal-bg').classList.add('hidden');
+}
+
+document.querySelectorAll('.country-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+        var code = btn.getAttribute('data-code');
+        localStorage.setItem(STORAGE_KEY, code);
+        closeModal();
+        loadGallery(code);
+    });
+});
+
+async function loadGallery(code){
+
+    var region  = REGIONS[code] || REGIONS.GLOBAL;
+    var url     = region.manifest;
+
+    document.getElementById('hero').innerHTML    = '<div class="loading">Loading...</div>';
+    document.getElementById('content').innerHTML = '';
+
     try{
+        var res      = await fetch(url);
+        var manifest = await res.json();
 
-        const res      = await fetch('manifest.json');
-        const manifest = await res.json();
+        // ── Cache Inspector ──
+        var xCache = res.headers.get('x-cache')       || 'local';
+        var pop    = res.headers.get('x-amz-cf-pop')  || 'local';
+        var age    = res.headers.get('age');
+        var cc     = res.headers.get('cache-control') || '—';
 
-        // ── Cache Inspector ──────────────────────────────────
-        const xCache = res.headers.get('x-cache')         || 'local';
-        const pop    = res.headers.get('x-amz-cf-pop')    || 'local';
-        const age    = res.headers.get('age');
-        const cc     = res.headers.get('cache-control')   || '—';
+        document.getElementById('i-file').textContent = url;
+        document.getElementById('i-pop').textContent  = pop;
+        document.getElementById('i-age').textContent  = age ? age + 's' : 'fresh';
+        document.getElementById('i-cc').textContent   = cc;
 
-        const fileLabel = manifest.region !== 'GLOBAL'
-            ? `manifest-${manifest.region}.json`
-            : 'manifest.json';
-
-        document.getElementById('i-file').textContent  = fileLabel;
-        document.getElementById('i-pop').textContent   = pop;
-        document.getElementById('i-age').textContent   = age ? `${age}s` : 'fresh';
-        document.getElementById('i-cc').textContent    = cc;
-
-        const cacheEl = document.getElementById('i-cache');
+        var cacheEl = document.getElementById('i-cache');
         cacheEl.textContent = xCache;
+        cacheEl.className   = 'val';
         if(xCache.toLowerCase().includes('hit'))       cacheEl.classList.add('hit');
         else if(xCache.toLowerCase().includes('miss')) cacheEl.classList.add('miss');
 
-        // ── Hero ─────────────────────────────────────────────
-        const regionLabel = manifest.region === 'GLOBAL'
-            ? 'Global — no Lambda@Edge routing detected'
-            : `Viewer routed to: ${manifest.region}`;
+        // ── Hero ──
+        var rowTitle = code === 'GLOBAL'
+            ? 'All Regions'
+            : 'Trending in ' + region.name;
 
-        document.getElementById('hero').innerHTML = `
-            <h1>EdgeDelivery</h1>
-            <span class="region-tag">&#127758; ${regionLabel}</span>
-            <p class="meta">
-                ${manifest.images.length} images
-                &nbsp;·&nbsp;
-                Generated ${new Date(manifest.generated_at).toUTCString()}
-            </p>
-        `;
+        document.getElementById('hero').innerHTML =
+            '<div>' +
+            '<h1>EdgeDelivery</h1>' +
+            '<span class="region-tag">' + region.flag + ' ' + region.name + '</span>' +
+            '<p class="meta">' + manifest.images.length + ' images' +
+            ' &nbsp;&middot;&nbsp; Generated ' + new Date(manifest.generated_at).toUTCString() +
+            '</p>' +
+            '</div>' +
+            '<button class="change-btn" id="change-region-btn">Change Region</button>';
 
-        // ── Carousel ──────────────────────────────────────────
-        const content = document.getElementById('content');
+        document.getElementById('change-region-btn').addEventListener('click', openModal);
+
+        // ── Carousel ──
+        var content = document.getElementById('content');
 
         if(!manifest.images.length){
             content.innerHTML =
-                `<p class="empty">No images for this region yet — add files to data/${manifest.region}/ and redeploy.</p>`;
+                '<p class="empty">No images for this region yet — add files to data/' +
+                (code === 'GLOBAL' ? '' : code + '/') + ' and redeploy.</p>';
             return;
         }
 
-        const rowTitle = manifest.region === 'GLOBAL'
-            ? 'All Regions'
-            : `Trending in ${manifest.region_name}`;
-
-        const row   = document.createElement('div');
+        var row   = document.createElement('div');
         row.className = 'row';
-        row.innerHTML = `<div class="row-title">${rowTitle}</div>`;
+        row.innerHTML = '<div class="row-title">' + rowTitle + '</div>';
 
-        const track = document.createElement('div');
+        var track = document.createElement('div');
         track.className = 'track';
 
-        manifest.images.forEach(src => {
-            const name = src.split('/').pop();
-            const card = document.createElement('div');
+        manifest.images.forEach(function(src){
+            var name = src.split('/').pop();
+            var card = document.createElement('div');
             card.className = 'card';
-            card.innerHTML = `
-                <img loading="lazy" src="${src}" alt="${name}">
-                <div class="card-label">${name}</div>
-            `;
+            card.innerHTML =
+                '<img loading="lazy" src="' + src + '" alt="' + name + '">' +
+                '<div class="card-label">' + name + '</div>';
             track.appendChild(card);
         });
 
@@ -290,16 +375,23 @@ async function loadGallery(){
 
     } catch(err){
         document.getElementById('hero').innerHTML = '';
-        document.getElementById('content').innerHTML = `
-            <div class="error">
-                Failed to load manifest.json<br><br>
-                Local dev: run <code>python3 generate_manifest.py</code> then <code>python3 -m http.server 8000</code>
-            </div>`;
+        document.getElementById('content').innerHTML =
+            '<div class="error">' +
+            'Failed to load ' + url + '<br><br>' +
+            'Local dev: <code>python3 generate_manifest.py &amp;&amp; python3 -m http.server 8000</code>' +
+            '</div>';
         console.error(err);
     }
 }
 
-loadGallery();
+// ── Init ──
+var saved = getSavedRegion();
+if(saved && REGIONS[saved]){
+    closeModal();
+    loadGallery(saved);
+} else {
+    openModal();
+}
 
 </script>
 </body>

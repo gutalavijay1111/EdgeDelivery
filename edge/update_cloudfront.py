@@ -2,9 +2,6 @@
 Associates a CloudFront Function (or Lambda@Edge) with the distribution's
 default cache behavior on the viewer-request event.
 
-Called by deploy-edge.yml after publishing a new function.
-Reads CLOUDFRONT_DISTRIBUTION_ID and either FUNCTION_ARN (CF Function)
-or LAMBDA_ARN (Lambda@Edge) from environment.
 """
 
 import boto3

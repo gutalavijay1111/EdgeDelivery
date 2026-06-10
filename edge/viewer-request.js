@@ -1,8 +1,7 @@
 'use strict';
 
-// Maps ISO 3166-1 alpha-2 country codes to their regional manifest file.
-// CloudFront injects CloudFront-Viewer-Country on every request.
-// Unmapped countries fall through to manifest.json (global fallback).
+// WARN: CF headers are not available in free-plan
+
 const MANIFEST_MAP = {
     JP: '/manifest-JP.json',
     US: '/manifest-US.json',
@@ -10,6 +9,7 @@ const MANIFEST_MAP = {
     NL: '/manifest-NL.json',
 };
 
+// CloudFront injects CloudFront-Viewer-Country on every request
 exports.handler = async (event) => {
     const request = event.Records[0].cf.request;
 
