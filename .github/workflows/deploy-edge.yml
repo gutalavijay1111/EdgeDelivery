@@ -34,13 +34,13 @@ jobs:
             ETAG=$(aws cloudfront describe-function --name $NAME --query 'ETag' --output text)
             aws cloudfront update-function \
               --name $NAME \
-              --function-config Comment="Routes manifest.json to regional file by viewer country",Runtime=cloudfront-js-2.0 \
+              --function-config Comment="Routes manifest.json to regional file by viewer country",Runtime=cloudfront-js-1.0 \
               --function-code fileb://edge/cf-function.js \
               --if-match $ETAG
           else
             aws cloudfront create-function \
               --name $NAME \
-              --function-config Comment="Routes manifest.json to regional file by viewer country",Runtime=cloudfront-js-2.0 \
+              --function-config Comment="Routes manifest.json to regional file by viewer country",Runtime=cloudfront-js-1.0 \
               --function-code fileb://edge/cf-function.js
           fi
 
@@ -72,5 +72,5 @@ jobs:
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
           echo "| **Function ARN** | \`${{ steps.fn.outputs.arn }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Event** | viewer-request |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Runtime** | cloudfront-js-2.0 (free tier) |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Runtime** | cloudfront-js-1.0 (free tier) |" >> $GITHUB_STEP_SUMMARY
           echo "| **Time** | $(date -u) |" >> $GITHUB_STEP_SUMMARY

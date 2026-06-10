@@ -1,4 +1,4 @@
-const MANIFEST_MAP = {
+var MANIFEST_MAP = {
     JP: '/manifest-JP.json',
     US: '/manifest-US.json',
     IN: '/manifest-IN.json',
@@ -6,12 +6,12 @@ const MANIFEST_MAP = {
 };
 
 function handler(event) {
-    const request = event.request;
+    var request = event.request;
 
     if (request.uri === '/manifest.json') {
-        const countryHeader = request.headers['cloudfront-viewer-country'];
-        const country = countryHeader?.value;
-        request.uri = MANIFEST_MAP[country] ?? '/manifest.json';
+        var countryHeader = request.headers['cloudfront-viewer-country'];
+        var country = countryHeader ? countryHeader.value : null;
+        request.uri = (country && MANIFEST_MAP[country]) || '/manifest.json';
     }
 
     return request;
