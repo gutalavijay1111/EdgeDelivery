@@ -10,22 +10,58 @@ The goal is not image hosting itself, but to learn how modern internet-scale sys
 
 Each item is a concrete, testable learning milestone.
 
+
+### Challenges Faced
+
+**1. `Route 53 + Private S3 + CloudFront`**
+First hosted S3 content via static hosting, connected Custom domain also ttached TLS certificate from AWS Certificate Manager. Connected the domain with the CF distribution. 
+
+**2. `Attaching Edge@Lambda` to CloudFront **
+Had to attach the Edge@Lambda under function associations only to viewer-request, while mentioning the ARN to the Lambda(version must be mentioned aswell). Edge@Lambda was a overkill for this usecase, hence moved to a CF function. 
+
+**3. `CloudFront Function runtime` rejects modern JavaScript**
+The CF Function runtime (`cloudfront-js-1.0`) is ES5 only — no `const`, `let`, arrow functions, template literals, or destructuring. The function silently failed until the runtime was set correctly and the code was rewritten in ES5.
+
+**4. `CloudFront-Viewer-Country` header never arrived in the CF Function**
+This was the core blocker for server-side geo-routing — see the section below.
+
+
+**5. `Custom cache policy` allowing CloudFront headers**
+Created a custom cache policy to allow the headers added by the CloudFront, but was unable to attach to the CF distribution (business plan needed for this)
+
+---
+
+### Why Geo-Routing Moved to the Frontend
+
+**The intended design** was for a CloudFront Function (or Lambda@Edge) running on the `viewer-request` event to read the `CloudFront-Viewer-Country` header and rewrite `/manifest.json` to `/manifest-JP.json`, `/manifest-US.json`, etc. — all at the edge, before CloudFront touches its cache.
+
+**What actually blocked it:**
+CloudFront injects geo-enrichment headers (`CloudFront-Viewer-Country`, `CloudFront-Viewer-City`, etc.) into the request, but those headers are only forwarded to a function if the distribution's **cache policy** or **origin request policy** explicitly allows them. Attaching a custom cache or origin request policy to a distribution requires either a paid feature tier or manual policy configuration that isn't available on the free-tier distribution setup. Without the policy attached, the function fires but `request.headers['cloudfront-viewer-country']` is always `null` — the header is stripped before the function ever sees it.
+
+Lambda@Edge has the same constraint: it runs on the viewer-request event, but the geo headers are only visible if the distribution is configured to forward them.
+
+**The fix:**
+Move country selection entirely to the browser. On first visit, a modal asks the user to pick a region. The selection is saved to `localStorage`. The page then fetches `manifest-{CC}.json` directly — no server-side rewrite needed. The CF Function is now a pass-through; the `/debug-country` endpoint is kept only to verify what CloudFront *would* detect (useful when testing with a VPN).
+
+This is actually more honest UX too: a user on a VPN in Japan watching US content would have been silently routed to the wrong manifest. Explicit selection is better.
+
+
 ### Phase 1 — Foundation
-- [ ] S3 static website hosting
-- [ ] CloudFront distribution wired to S3
-- [ ] GitHub Actions deploy pipeline on every push to `main`
-- [ ] `manifest.json` generated at deploy time (no browser AWS credentials)
-- [ ] Smart invalidation — only `/manifest.json` and `/index.html`, not `/*`
-- [ ] Immutable cache headers on images (`max-age=31536000,immutable`)
-- [ ] `no-cache` on manifest so browsers always revalidate
+- [x] S3 static website hosting
+- [x] CloudFront distribution wired to S3
+- [x] GitHub Actions deploy pipeline on every push to `main`
+- [x] `manifest.json` generated at deploy time (no browser AWS credentials)
+- [x] Smart invalidation — only `/manifest.json` and `/index.html`, not `/*`
+- [x] Immutable cache headers on images (`max-age=31536000,immutable`)
+- [x] `no-cache` on manifest so browsers always revalidate
 
 ### Phase 2 — Netflix-style Geo-targeted Carousel
-- [ ] Per-region manifest files (`manifest-JP.json`, `manifest-US.json`, `manifest-IN.json`)
-- [ ] Lambda@Edge on viewer-request reads `CloudFront-Viewer-Country` header and rewrites manifest URL to correct region file
-- [ ] Frontend renders horizontal carousel rows: "Trending in Japan", "Trending in the US", etc.
-- [ ] GitHub Actions generates all regional manifests from `data/<country>/` folders on push
-- [ ] Automated per-region cache invalidation when a region's manifest is updated
-- [ ] Test geo-routing with VPN — switch country, see different content served without app changes
+- [x] Per-region manifest files (`manifest-JP.json`, `manifest-US.json`, `manifest-IN.json`)
+- [x] Lambda@Edge on viewer-request reads `CloudFront-Viewer-Country` header and rewrites manifest URL to correct region file
+- [x] Frontend renders horizontal carousel rows: "Trending in Japan", "Trending in the US", etc.
+- [x] GitHub Actions generates all regional manifests from `data/<country>/` folders on push
+- [x] Test geo-routing with VPN — switch country, see different content served without app changes
+- [x] Automated per-region cache invalidation when a region's manifest is updated
 
 ### Phase 3 — Edge Caching Experiments
 - [ ] Short TTL on carousel images (`s-maxage=300`) — cache at edge for 5 min, then re-fetch from origin; observe HIT → MISS → HIT cycle
@@ -106,139 +142,6 @@ CloudFront CDN
     ▼
 End Users
 ```
-
----
-
-## Key Engineering Concepts
-
-### Static Site Hosting
-
-The frontend is hosted entirely from S3 and distributed globally through CloudFront.
-
-### Metadata Indexing
-
-Rather than querying S3 from the browser, a deployment step generates:
-
-```json
-{
-  "generated_at": "...",
-  "images": [...]
-}
-```
-
-This avoids:
-
-- Browser AWS credentials
-- CORS complexity
-- Direct S3 listing operations
-
-### CDN Optimization
-
-Images are treated as immutable assets.
-
-```http
-Cache-Control:
-public,max-age=31536000,immutable
-```
-
-The manifest receives:
-
-```http
-Cache-Control:
-no-cache
-```
-
-This allows CloudFront to refresh metadata while keeping image assets cached.
-
-### Automated Deployment
-
-Every push to the main branch automatically:
-
-1. Generates metadata
-2. Syncs files to S3
-3. Invalidates CloudFront cache
-4. Publishes globally
-
----
-
-## Repository Structure
-
-```text
-.
-├── data/
-│   ├── image1.jpg
-│   ├── image2.jpg
-│   └── ...
-│
-├── index.html
-├── manifest.json
-├── generate_manifest.py
-│
-├── .github/
-│   └── workflows/
-│       └── deploy.yml
-│
-└── README.md
-```
-
----
-
-## Deployment Workflow
-
-```text
-git push
-   │
-   ▼
-GitHub Actions
-   │
-   ▼
-Generate Manifest
-   │
-   ▼
-S3 Sync
-   │
-   ▼
-CloudFront Invalidation
-   │
-   ▼
-Global Availability
-```
-
----
-
-## Concept Reference
-
-### Why Lambda@Edge for Geo-routing?
-
-CloudFront attaches a `CloudFront-Viewer-Country` header (ISO 3166-1 alpha-2 code) to every request. A Lambda@Edge function running on the viewer-request event can rewrite the request URL before CloudFront checks its cache:
-
-```
-GET /manifest.json
-CloudFront-Viewer-Country: JP
-→ Lambda@Edge rewrites to /manifest-JP.json
-```
-
-No app-server round-trip. The rewrite happens at the edge node closest to the user.
-
-### Why CloudFront Functions vs Lambda@Edge?
-
-| | CloudFront Functions | Lambda@Edge |
-|---|---|---|
-| Runtime | JS (ES5) | Node / Python |
-| Trigger | viewer-request / viewer-response only | All 4 events |
-| Latency | ~1ms | ~1ms + cold start |
-| Cost | ~1/6th the price | Standard Lambda pricing |
-| Use for | Header injection, simple URL rewrites | Complex logic, geo-routing, auth |
-
-### Cache TTL Mental Model
-
-```
-Cache-Control: no-cache          → browser must revalidate every time
-Cache-Control: s-maxage=300      → CDN edge caches for 5 min, browser uses CDN
-Cache-Control: max-age=31536000,immutable → cached for 1 year, never revalidated
-```
-
-`s-maxage` controls the CDN. `max-age` controls the browser. Using both lets you cache long at the CDN while keeping the browser fresh.
 
 ### Asset Fingerprinting Eliminates Invalidations
 
