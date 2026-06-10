@@ -29,12 +29,11 @@ jobs:
 
       - name: Sync regional image folders to S3
         run: |
-          for region in JP US IN; do
-            if [ -d "data/$region" ]; then
-              aws s3 sync data/$region/ s3://${{ secrets.S3_BUCKET }}/data/$region/ \
-                --cache-control "public,max-age=31536000,immutable" \
-                --delete
-            fi
+          for region in data/*/; do
+            region=$(basename "$region")
+            aws s3 sync data/$region/ s3://${{ secrets.S3_BUCKET }}/data/$region/ \
+              --cache-control "public,max-age=31536000,immutable" \
+              --delete
           done
 
       - name: Upload index.html
@@ -44,7 +43,8 @@ jobs:
 
       - name: Upload all regional manifests
         run: |
-          for region in JP US IN; do
+          for region in data/*/; do
+            region=$(basename "$region")
             aws s3 cp manifest-$region.json s3://${{ secrets.S3_BUCKET }}/manifest-$region.json \
               --cache-control "no-cache"
           done
@@ -53,9 +53,14 @@ jobs:
 
       - name: Invalidate CloudFront cache
         run: |
+          PATHS="/index.html /manifest.json"
+          for region in data/*/; do
+            region=$(basename "$region")
+            PATHS="$PATHS /manifest-$region.json"
+          done
           aws cloudfront create-invalidation \
             --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
-            --paths "/index.html" "/manifest.json" "/manifest-JP.json" "/manifest-US.json" "/manifest-IN.json"
+            --paths $PATHS
 
       - name: Smoke test — verify cache headers and post deploy summary
         run: |
