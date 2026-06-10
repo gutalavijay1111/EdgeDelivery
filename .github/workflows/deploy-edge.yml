@@ -1,13 +1,14 @@
-name: Deploy Lambda@Edge
+name: Deploy CloudFront Function
 
-# Only runs when the geo-routing function itself changes.
-# Lambda@Edge must be deployed in us-east-1 regardless of the S3/CF region.
+# Runs only when the geo-routing function changes.
+# CloudFront Functions are free tier and deploy globally in seconds —
+# no IAM execution role or us-east-1 requirement like Lambda@Edge.
 
 on:
   push:
     branches: [main]
     paths:
-      - 'edge/viewer-request.js'
+      - 'edge/cf-function.js'
 
 jobs:
   deploy:
@@ -17,47 +18,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure AWS credentials (us-east-1 required for Lambda@Edge)
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      - name: Zip Lambda function
-        run: zip -j edge/viewer-request.zip edge/viewer-request.js
-
-      - name: Create or update Lambda function
-        id: lambda
+      - name: Create or update CloudFront Function
+        id: fn
         run: |
-          FUNCTION_NAME="cloudfront-geo-manifest-router"
+          NAME="geo-manifest-router"
 
-          if aws lambda get-function --function-name $FUNCTION_NAME 2>/dev/null; then
-            aws lambda update-function-code \
-              --function-name $FUNCTION_NAME \
-              --zip-file fileb://edge/viewer-request.zip
-            aws lambda wait function-updated --function-name $FUNCTION_NAME
+          if aws cloudfront describe-function --name $NAME 2>/dev/null; then
+            ETAG=$(aws cloudfront describe-function --name $NAME --query 'ETag' --output text)
+            aws cloudfront update-function \
+              --name $NAME \
+              --function-config Comment="Routes manifest.json to regional file by viewer country",Runtime=cloudfront-js-2.0 \
+              --function-code fileb://edge/cf-function.js \
+              --if-match $ETAG
           else
-            aws lambda create-function \
-              --function-name $FUNCTION_NAME \
-              --runtime nodejs20.x \
-              --role ${{ secrets.LAMBDA_EDGE_ROLE_ARN }} \
-              --handler viewer-request.handler \
-              --zip-file fileb://edge/viewer-request.zip
-            aws lambda wait function-active --function-name $FUNCTION_NAME
+            aws cloudfront create-function \
+              --name $NAME \
+              --function-config Comment="Routes manifest.json to regional file by viewer country",Runtime=cloudfront-js-2.0 \
+              --function-code fileb://edge/cf-function.js
           fi
 
-          # Lambda@Edge requires a published version (not $LATEST)
-          VERSION=$(aws lambda publish-version \
-            --function-name $FUNCTION_NAME \
-            --query 'Version' --output text)
+          ETAG=$(aws cloudfront describe-function --name $NAME --query 'ETag' --output text)
+          ARN=$(aws cloudfront publish-function --name $NAME --if-match $ETAG \
+            --query 'FunctionSummary.FunctionMetadata.FunctionARN' --output text)
 
-          ARN=$(aws lambda get-function \
-            --function-name $FUNCTION_NAME \
-            --query 'Configuration.FunctionArn' --output text)
-
-          echo "arn=${ARN}:${VERSION}" >> $GITHUB_OUTPUT
-          echo "Published ${ARN}:${VERSION}"
+          echo "arn=$ARN" >> $GITHUB_OUTPUT
+          echo "Published: $ARN"
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -67,18 +59,18 @@ jobs:
       - name: Install boto3
         run: pip install boto3 -q
 
-      - name: Associate Lambda@Edge version with CloudFront distribution
+      - name: Associate function with CloudFront distribution
         run: python3 edge/update_cloudfront.py
         env:
           CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
-          LAMBDA_ARN: ${{ steps.lambda.outputs.arn }}
+          FUNCTION_ARN: ${{ steps.fn.outputs.arn }}
 
-      - name: Post summary
+      - name: Summary
         run: |
-          echo "## Lambda@Edge Deploy" >> $GITHUB_STEP_SUMMARY
+          echo "## CloudFront Function Deploy" >> $GITHUB_STEP_SUMMARY
           echo "| | |" >> $GITHUB_STEP_SUMMARY
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Function ARN** | \`${{ steps.lambda.outputs.arn }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Distribution** | \`${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Function ARN** | \`${{ steps.fn.outputs.arn }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Event** | viewer-request |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Runtime** | cloudfront-js-2.0 (free tier) |" >> $GITHUB_STEP_SUMMARY
           echo "| **Time** | $(date -u) |" >> $GITHUB_STEP_SUMMARY
