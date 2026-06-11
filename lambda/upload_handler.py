@@ -14,19 +14,11 @@ REGION_NAMES = {
     "JP": "Japan", "US": "United States", "IN": "India", "NL": "Netherlands"
 }
 
-CORS = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-}
-
-
 def handler(event, context):
     method = event.get("requestContext", {}).get("http", {}).get("method", "GET")
     path = "/" + event.get("rawPath", "/").lstrip("/")
 
-    if method == "OPTIONS":
-        return _resp(204, None)
+    # OPTIONS is handled by the Lambda Function URL CORS config — no need to intercept it
     if path == "/upload" and method == "GET":
         return _handle_upload(event)
     if path == "/manifest" and method == "POST":
@@ -116,7 +108,7 @@ def _handle_manifest(event):
 
 
 def _resp(status, body):
-    r = {"statusCode": status, "headers": {**CORS, "Content-Type": "application/json"}}
+    r = {"statusCode": status, "headers": {"Content-Type": "application/json"}}
     if body is not None:
         r["body"] = json.dumps(body)
     return r
