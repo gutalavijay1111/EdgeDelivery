@@ -91,6 +91,7 @@ jobs:
           sed "s|var UPLOAD_ENDPOINT = '.*';|var UPLOAD_ENDPOINT = '$LAMBDA_URL';|" \
             index.html > index.html.deploy
           aws s3 cp index.html.deploy s3://${{ secrets.S3_BUCKET }}/index.html \
+            --content-type "text/html" \
             --cache-control "no-cache"
 
       - name: Invalidate CloudFront cache
