@@ -68,13 +68,16 @@ jobs:
               --role ${{ secrets.LAMBDA_EXECUTION_ROLE_ARN }} \
               --environment "Variables={S3_BUCKET=${{ secrets.S3_BUCKET }},CLOUDFRONT_DISTRIBUTION_ID=${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}}"
 
-            # Enable public Function URL with CORS
+          fi
+
+          # Ensure Function URL exists (idempotent — handles partial prior runs)
+          if ! aws lambda get-function-url-config --function-name edge-upload 2>/dev/null; then
             aws lambda add-permission \
               --function-name edge-upload \
               --statement-id FunctionURLAllowPublicAccess \
               --action lambda:InvokeFunctionUrl \
               --principal "*" \
-              --function-url-auth-type NONE
+              --function-url-auth-type NONE 2>/dev/null || true
 
             aws lambda create-function-url-config \
               --function-name edge-upload \
