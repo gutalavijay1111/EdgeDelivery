@@ -17,8 +17,8 @@ jobs:
         with:
           python-version: "3.x"
 
-      - name: Generate manifests for all regions
-        run: python3 generate_manifest.py
+      - name: Install boto3
+        run: pip install boto3 -q
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -27,14 +27,10 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Sync regional image folders to S3
-        run: |
-          for region in data/*/; do
-            region=$(basename "$region")
-            aws s3 sync data/$region/ s3://${{ secrets.S3_BUCKET }}/data/$region/ \
-              --cache-control "public,max-age=31536000,immutable" \
-              --delete
-          done
+      - name: Generate manifests (reads from S3)
+        run: python3 generate_manifest.py
+        env:
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
 
       - name: Upload index.html
         run: |
@@ -43,24 +39,60 @@ jobs:
 
       - name: Upload all regional manifests
         run: |
-          for region in data/*/; do
-            region=$(basename "$region")
+          for region in JP US IN NL; do
             aws s3 cp manifest-$region.json s3://${{ secrets.S3_BUCKET }}/manifest-$region.json \
               --cache-control "no-cache"
           done
           aws s3 cp manifest.json s3://${{ secrets.S3_BUCKET }}/manifest.json \
             --cache-control "no-cache"
 
+      - name: Deploy upload Lambda
+        run: |
+          cd lambda
+          zip -q function.zip upload_handler.py
+
+          # Update code if function exists, otherwise create it
+          if aws lambda get-function --function-name edge-upload 2>/dev/null; then
+            aws lambda update-function-code \
+              --function-name edge-upload \
+              --zip-file fileb://function.zip
+            aws lambda update-function-configuration \
+              --function-name edge-upload \
+              --environment "Variables={S3_BUCKET=${{ secrets.S3_BUCKET }},CLOUDFRONT_DISTRIBUTION_ID=${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}}"
+          else
+            aws lambda create-function \
+              --function-name edge-upload \
+              --runtime python3.12 \
+              --handler upload_handler.handler \
+              --zip-file fileb://function.zip \
+              --role ${{ secrets.LAMBDA_EXECUTION_ROLE_ARN }} \
+              --environment "Variables={S3_BUCKET=${{ secrets.S3_BUCKET }},CLOUDFRONT_DISTRIBUTION_ID=${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}}"
+
+            # Enable public Function URL with CORS
+            aws lambda add-permission \
+              --function-name edge-upload \
+              --statement-id FunctionURLAllowPublicAccess \
+              --action lambda:InvokeFunctionUrl \
+              --principal "*" \
+              --function-url-auth-type NONE
+
+            aws lambda create-function-url-config \
+              --function-name edge-upload \
+              --auth-type NONE \
+              --cors '{"AllowOrigins":["*"],"AllowMethods":["GET","POST","OPTIONS"],"AllowHeaders":["Content-Type"]}'
+          fi
+
+          LAMBDA_URL=$(aws lambda get-function-url-config \
+            --function-name edge-upload \
+            --query 'FunctionUrl' --output text)
+          echo "LAMBDA_URL=$LAMBDA_URL" >> $GITHUB_ENV
+          echo "Lambda URL: $LAMBDA_URL"
+
       - name: Invalidate CloudFront cache
         run: |
-          PATHS="/index.html /manifest.json"
-          for region in data/*/; do
-            region=$(basename "$region")
-            PATHS="$PATHS /manifest-$region.json"
-          done
           aws cloudfront create-invalidation \
             --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
-            --paths $PATHS
+            --paths "/index.html" "/manifest.json" "/manifest-JP.json" "/manifest-US.json" "/manifest-IN.json" "/manifest-NL.json"
 
       - name: Smoke test — verify cache headers and post deploy summary
         run: |
@@ -72,6 +104,7 @@ jobs:
           echo "| | |" >> $GITHUB_STEP_SUMMARY
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
           echo "| **URL** | https://$CF_DOMAIN |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Upload endpoint** | \`$LAMBDA_URL\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Time** | $(date -u) |" >> $GITHUB_STEP_SUMMARY
           echo "| **Commit** | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

@@ -2,3 +2,5 @@ manifest*.json
 __pycache__/
 *.pyc
 .DS_Store
+venv/
+poster_generators/

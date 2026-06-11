@@ -86,6 +86,57 @@ body{
     overflow-x: hidden;
 }
 
+/* ── Upload modal ── */
+
+.upload-form{ display: flex; flex-direction: column; gap: 16px; }
+
+.upload-field{ display: flex; flex-direction: column; gap: 6px; }
+.upload-field label{
+    font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--text-label);
+}
+.upload-field select,
+.upload-field input[type="file"]{
+    padding: 10px 14px;
+    background: var(--bg-country);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.82rem;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    outline: none;
+    transition: border-color 0.15s;
+}
+.upload-field select:focus,
+.upload-field input[type="file"]:focus{ border-color: var(--amber); }
+
+.upload-btn{
+    padding: 12px 20px;
+    background: var(--amber);
+    border: none;
+    border-radius: 100px;
+    color: #fff;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.1rem;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.15s;
+}
+.upload-btn:hover:not(:disabled){ opacity: 0.88; transform: translateY(-1px); }
+.upload-btn:disabled{ opacity: 0.45; cursor: not-allowed; }
+
+.upload-status{
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    min-height: 1.2em;
+    text-align: center;
+}
+.upload-status.ok { color: var(--hit); font-weight: 600; }
+.upload-status.err{ color: var(--miss); font-weight: 600; }
+
 /* ── Modal ── */
 
 .modal-bg{
@@ -165,7 +216,7 @@ body{
 
 .country-btn:hover{
     border-color: var(--amber);
-    transform: translateY(-2px);
+    transform: translateY(-2px);    
     box-shadow: 0 6px 20px var(--amber-dim);
 }
 
@@ -494,10 +545,38 @@ body{
         <span class="val" id="i-cc">—</span>
     </div>
     <div class="spacer"></div>
+    <button class="theme-toggle" id="upload-btn">
+        + Upload
+    </button>
     <button class="theme-toggle" id="theme-toggle">
         <span id="theme-icon">🌙</span>
         <span id="theme-label">Dark</span>
     </button>
+</div>
+
+<!-- Upload Modal -->
+<div class="modal-bg hidden" id="upload-modal-bg">
+    <div class="modal">
+        <p class="modal-eyebrow">EdgeDelivery</p>
+        <h2>Upload<br>Image</h2>
+        <div class="upload-form">
+            <div class="upload-field">
+                <label for="upload-region">Region</label>
+                <select id="upload-region">
+                    <option value="JP">🇯🇵 Japan (JP)</option>
+                    <option value="US">🇺🇸 United States (US)</option>
+                    <option value="IN">🇮🇳 India (IN)</option>
+                    <option value="NL">🇳🇱 Netherlands (NL)</option>
+                </select>
+            </div>
+            <div class="upload-field">
+                <label for="upload-file">Image file</label>
+                <input type="file" id="upload-file" accept=".jpg,.jpeg,.png,.webp">
+            </div>
+            <button class="upload-btn" id="upload-submit" disabled>Upload to S3</button>
+            <p class="upload-status" id="upload-status"></p>
+        </div>
+    </div>
 </div>
 
 <!-- Hero (injected by JS) -->
@@ -655,6 +734,77 @@ async function loadGallery(code){
         console.error(err);
     }
 }
+
+/* ── Upload ── */
+
+// Replace with your Lambda Function URL after first deploy
+var UPLOAD_ENDPOINT = '';
+
+document.getElementById('upload-btn').addEventListener('click', function(){
+    document.getElementById('upload-status').textContent = '';
+    document.getElementById('upload-status').className = 'upload-status';
+    document.getElementById('upload-modal-bg').classList.remove('hidden');
+});
+
+document.getElementById('upload-modal-bg').addEventListener('click', function(e){
+    if(e.target === this) this.classList.add('hidden');
+});
+
+document.getElementById('upload-file').addEventListener('change', function(){
+    document.getElementById('upload-submit').disabled = !this.files.length;
+});
+
+document.getElementById('upload-submit').addEventListener('click', async function(){
+    var file   = document.getElementById('upload-file').files[0];
+    var region = document.getElementById('upload-region').value;
+    var status = document.getElementById('upload-status');
+    var btn    = this;
+
+    if(!UPLOAD_ENDPOINT){
+        status.textContent = 'UPLOAD_ENDPOINT not configured — set it in index.html';
+        status.className = 'upload-status err';
+        return;
+    }
+
+    btn.disabled = true;
+    status.className = 'upload-status';
+    status.textContent = 'Getting presigned URL…';
+
+    try{
+        // 1. Get presigned PUT URL from Lambda
+        var r1 = await fetch(UPLOAD_ENDPOINT + '/upload?filename=' +
+            encodeURIComponent(file.name) + '&region=' + region);
+        if(!r1.ok) throw new Error(await r1.text());
+        var { url } = await r1.json();
+
+        // 2. PUT the file directly to S3
+        status.textContent = 'Uploading to S3…';
+        var r2 = await fetch(url, {
+            method: 'PUT',
+            body: file,
+            headers: { 'Content-Type': file.type || 'image/jpeg' }
+        });
+        if(!r2.ok) throw new Error('S3 PUT failed: ' + r2.status);
+
+        // 3. Regenerate manifest so gallery reflects the new image
+        status.textContent = 'Refreshing manifest…';
+        await fetch(UPLOAD_ENDPOINT + '/manifest?region=' + region, { method: 'POST' });
+
+        status.textContent = file.name + ' uploaded!';
+        status.className = 'upload-status ok';
+
+        // Reload gallery if viewing the same region (or global)
+        var active = localStorage.getItem(REGION_KEY);
+        if(active === region || active === 'GLOBAL') loadGallery(active);
+
+    } catch(err){
+        status.textContent = err.message || 'Upload failed';
+        status.className = 'upload-status err';
+    } finally{
+        btn.disabled = false;
+        document.getElementById('upload-file').value = '';
+    }
+});
 
 /* ── Init ── */
 
