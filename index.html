@@ -407,50 +407,74 @@ body{
 }
 
 .track{
-    display: flex;
-    flex-wrap: nowrap;
-    gap: 14px;
-    overflow-x: auto;
-    padding: 6px 36px 20px;
-    scrollbar-width: thin;
-    scrollbar-color: var(--amber) transparent;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 18px;
+    padding: 6px 36px 32px;
 }
 
-.track::-webkit-scrollbar{ height: 3px; }
-.track::-webkit-scrollbar-thumb{ background: var(--amber); border-radius: 2px; }
-
 .card{
-    flex: 0 0 240px;
-    border-radius: 14px;
+    border-radius: 18px;
     overflow: hidden;
     background: var(--bg-card);
     border: 1px solid var(--border-card);
     cursor: pointer;
     box-shadow: var(--shadow);
-    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
     transform-origin: bottom center;
+    display: flex;
+    flex-direction: column;
 }
 
 .card:hover{
-    transform: scale(1.06) translateY(-6px) rotate(-0.8deg);
+    transform: translateY(-8px) rotate(-1deg);
     box-shadow: var(--shadow-lg);
-    border-color: var(--amber);
 }
 
 .card:nth-child(even):hover{
-    transform: scale(1.06) translateY(-6px) rotate(0.8deg);
+    transform: translateY(-8px) rotate(1deg);
 }
 
-.card img{ width: 100%; height: 160px; object-fit: cover; display: block; }
+.card-thumb{
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.card-thumb img{
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform 0.3s ease;
+}
+
+.card:hover .card-thumb img{
+    transform: scale(1.06);
+}
 
 .card-label{
-    padding: 10px 12px;
-    font-size: 0.7rem;
-    font-weight: 500;
-    color: var(--text-muted);
+    background: var(--amber);
+    padding: 12px 14px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 0.9rem;
+    letter-spacing: 0.06em;
+    color: #ffffff;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+}
+
+.card-label::after{
+    content: '›';
+    font-size: 1rem;
+    opacity: 0.7;
+    flex-shrink: 0;
 }
 
 /* ── States ── */
@@ -484,9 +508,184 @@ body{
     color: var(--amber-dark);
 }
 
+/* ── Detail Modal ── */
+
+.detail-bg{
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.78);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 400;
+    backdrop-filter: blur(10px);
+    padding: 24px;
+    animation: fadeIn 0.18s ease;
+}
+
+.detail-bg.hidden{ display: none; }
+
+@keyframes fadeIn{
+    from{ opacity:0; }
+    to{   opacity:1; }
+}
+
+.detail-modal{
+    background: #141414;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 680px;
+    overflow: hidden;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.8);
+    animation: popIn 0.22s cubic-bezier(0.34,1.26,0.64,1);
+    position: relative;
+}
+
+@keyframes popIn{
+    from{ transform: scale(0.92); opacity:0; }
+    to{   transform: scale(1);    opacity:1; }
+}
+
+.detail-close{
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    z-index: 10;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.6);
+    border: none;
+    color: #fff;
+    font-size: 1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, transform 0.15s;
+}
+
+.detail-close:hover{
+    background: rgba(255,255,255,0.2);
+    transform: scale(1.1);
+}
+
+.detail-hero{
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+}
+
+.detail-hero img{
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.detail-hero-overlay{
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        to bottom,
+        transparent 30%,
+        rgba(0,0,0,0.55) 65%,
+        rgba(20,20,20,0.98) 100%
+    );
+}
+
+.detail-hero-title{
+    position: absolute;
+    bottom: 20px;
+    left: 24px;
+    right: 60px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(2rem, 5vw, 3rem);
+    letter-spacing: 0.02em;
+    color: #ffffff;
+    line-height: 1;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.6);
+}
+
+.detail-body{
+    padding: 20px 24px 28px;
+}
+
+.detail-tags{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.detail-tag{
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    border: 1px solid rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.7);
+    background: rgba(255,255,255,0.07);
+}
+
+.detail-tag.region{
+    background: var(--amber-dim);
+    border-color: var(--amber-border);
+    color: var(--amber);
+}
+
+.detail-desc{
+    font-size: 0.85rem;
+    color: rgba(255,255,255,0.65);
+    line-height: 1.6;
+    margin-bottom: 22px;
+}
+
+.detail-cta{
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 28px;
+    background: var(--amber);
+    border: none;
+    border-radius: 6px;
+    color: #ffffff;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.15s, transform 0.15s;
+}
+
+.detail-cta:hover{
+    background: var(--amber-dark);
+    transform: translateY(-1px);
+}
+
 </style>
 </head>
 <body>
+
+<!-- Detail Modal -->
+<div class="detail-bg hidden" id="detail-bg">
+    <div class="detail-modal" id="detail-modal">
+        <button class="detail-close" id="detail-close">✕</button>
+        <div class="detail-hero">
+            <img id="detail-img" src="" alt="">
+            <div class="detail-hero-overlay"></div>
+            <h2 class="detail-hero-title" id="detail-title"></h2>
+        </div>
+        <div class="detail-body">
+            <div class="detail-tags" id="detail-tags"></div>
+            <p class="detail-desc" id="detail-desc"></p>
+            <a class="detail-cta" id="detail-cta" target="_blank" rel="noopener">View Full Size &rsaquo;</a>
+        </div>
+    </div>
+</div>
 
 <!-- Country Picker Modal -->
 <div class="modal-bg" id="modal-bg">
@@ -716,8 +915,9 @@ async function loadGallery(code){
             var card = document.createElement('div');
             card.className = 'card';
             card.innerHTML =
-                '<img loading="lazy" src="' + src + '" alt="' + name + '">' +
+                '<div class="card-thumb"><img loading="lazy" src="' + src + '" alt="' + name + '"></div>' +
                 '<div class="card-label">' + name + '</div>';
+            card.addEventListener('click', function(){ openDetail(src, name, region); });
             track.appendChild(card);
         });
 
@@ -735,10 +935,67 @@ async function loadGallery(code){
     }
 }
 
+/* ── Detail Modal ── */
+
+function toTitle(filename){
+    return filename
+        .replace(/\.[^/.]+$/, '')
+        .replace(/[-_]/g, ' ')
+        .replace(/\b\w/g, function(c){ return c.toUpperCase(); });
+}
+
+function openDetail(src, filename, region){
+    var title = toTitle(filename);
+    var ext   = (filename.match(/\.(\w+)$/) || ['',''])[1].toUpperCase();
+
+    document.getElementById('detail-img').src           = src;
+    document.getElementById('detail-img').alt           = title;
+    document.getElementById('detail-title').textContent = title;
+    document.getElementById('detail-cta').href          = src;
+
+    var tags = [
+        { label: region.name, cls: 'region' },
+        { label: ext || 'IMG',  cls: '' },
+        { label: 'CDN',         cls: '' },
+        { label: 'Edge Cached', cls: '' },
+    ];
+
+    document.getElementById('detail-tags').innerHTML = tags.map(function(t){
+        return '<span class="detail-tag ' + t.cls + '">' + t.label + '</span>';
+    }).join('');
+
+    document.getElementById('detail-desc').textContent =
+        'Served from the nearest CloudFront edge PoP. ' +
+        'Cached for 1 year as an immutable asset — ' +
+        'no origin request after the first cache fill.';
+
+    var bg = document.getElementById('detail-bg');
+    bg.classList.remove('hidden');
+    // re-trigger animation on repeated opens
+    var modal = document.getElementById('detail-modal');
+    modal.style.animation = 'none';
+    modal.offsetHeight;
+    modal.style.animation = '';
+}
+
+function closeDetail(){
+    document.getElementById('detail-bg').classList.add('hidden');
+}
+
+document.getElementById('detail-close').addEventListener('click', closeDetail);
+
+document.getElementById('detail-bg').addEventListener('click', function(e){
+    if(e.target === this) closeDetail();
+});
+
+document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape') closeDetail();
+});
+
 /* ── Upload ── */
 
 // Replace with your Lambda Function URL after first deploy
-var UPLOAD_ENDPOINT = '';
+var UPLOAD_ENDPOINT = 'https://og6cyekf5xkoojtf7s6mpbmy2m0fgxxo.lambda-url.ap-south-1.on.aws/';
 
 document.getElementById('upload-btn').addEventListener('click', function(){
     document.getElementById('upload-status').textContent = '';
