@@ -23,7 +23,7 @@ CORS = {
 
 def handler(event, context):
     method = event.get("requestContext", {}).get("http", {}).get("method", "GET")
-    path = event.get("rawPath", "/")
+    path = "/" + event.get("rawPath", "/").lstrip("/")
 
     if method == "OPTIONS":
         return _resp(204, None)
@@ -44,13 +44,19 @@ def _handle_upload(event):
     if not filename or not filename.lower().endswith(IMAGE_EXTS):
         return _resp(400, {"error": "filename must end with .jpg/.jpeg/.png/.webp"})
 
+    ext = filename.rsplit(".", 1)[-1].lower()
+    content_type = {
+        "jpg": "image/jpeg", "jpeg": "image/jpeg",
+        "png": "image/png", "webp": "image/webp",
+    }.get(ext, "image/jpeg")
+
     key = f"data/{region}/{filename}"
     presigned_url = s3.generate_presigned_url(
         "put_object",
-        Params={"Bucket": BUCKET, "Key": key, "ContentType": "image/jpeg"},
+        Params={"Bucket": BUCKET, "Key": key, "ContentType": content_type},
         ExpiresIn=300,
     )
-    return _resp(200, {"url": presigned_url, "key": key})
+    return _resp(200, {"url": presigned_url, "key": key, "content_type": content_type})
 
 
 def _handle_manifest(event):

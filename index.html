@@ -1029,23 +1029,24 @@ document.getElementById('upload-submit').addEventListener('click', async functio
 
     try{
         // 1. Get presigned PUT URL from Lambda
-        var r1 = await fetch(UPLOAD_ENDPOINT + '/upload?filename=' +
+        var base = UPLOAD_ENDPOINT.replace(/\/+$/, '');
+        var r1 = await fetch(base + '/upload?filename=' +
             encodeURIComponent(file.name) + '&region=' + region);
         if(!r1.ok) throw new Error(await r1.text());
-        var { url } = await r1.json();
+        var d1 = await r1.json();
 
-        // 2. PUT the file directly to S3
+        // 2. PUT the file directly to S3 using the content_type Lambda resolved
         status.textContent = 'Uploading to S3…';
-        var r2 = await fetch(url, {
+        var r2 = await fetch(d1.url, {
             method: 'PUT',
             body: file,
-            headers: { 'Content-Type': file.type || 'image/jpeg' }
+            headers: { 'Content-Type': d1.content_type }
         });
         if(!r2.ok) throw new Error('S3 PUT failed: ' + r2.status);
 
         // 3. Regenerate manifest so gallery reflects the new image
         status.textContent = 'Refreshing manifest…';
-        await fetch(UPLOAD_ENDPOINT + '/manifest?region=' + region, { method: 'POST' });
+        await fetch(base + '/manifest?region=' + region, { method: 'POST' });
 
         status.textContent = file.name + ' uploaded!';
         status.className = 'upload-status ok';
