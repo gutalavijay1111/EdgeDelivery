@@ -1,0 +1,161 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "poster_generators/**"
+      - ".github/workflows/deploy-backend.yml"
+
+# Required GitHub Actions Variables (set in repo Settings → Variables):
+#   AWS_REGION               e.g. ap-south-1
+#   ECR_REPOSITORY           e.g. edgedelivery-backend
+#   ECS_CLUSTER              e.g. edgedelivery-cluster
+#   ECS_SERVICE_WEB          e.g. edgedelivery-web
+#   ECS_SERVICE_CELERY       e.g. edgedelivery-celery
+#   ECS_TASK_DEFINITION_WEB     e.g. edgedelivery-web
+#   ECS_TASK_DEFINITION_CELERY  e.g. edgedelivery-celery
+#   CONTAINER_NAME           e.g. edgedelivery-app  (same name in both task defs)
+#
+# Required GitHub Actions Secrets:
+#   AWS_ACCESS_KEY_ID
+#   AWS_SECRET_ACCESS_KEY
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+
+jobs:
+  deploy:
+    name: Build → Migrate → Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # ── Build ────────────────────────────────────────────────────────────
+      - name: Build and push Docker image
+        id: build
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker build \
+            -f backend/Dockerfile \
+            -t "$IMAGE_URI" \
+            -t "$ECR_REGISTRY/$ECR_REPOSITORY:latest" \
+            .
+          docker push "$IMAGE_URI"
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+          echo "image=$IMAGE_URI" >> $GITHUB_OUTPUT
+
+      # ── Prepare web task definition ──────────────────────────────────────
+      - name: Download current web task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition ${{ vars.ECS_TASK_DEFINITION_WEB }} \
+            --query taskDefinition \
+            > task-def-web.json
+
+      - name: Inject new image into web task definition
+        id: task-def-web
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-def-web.json
+          container-name: ${{ vars.CONTAINER_NAME }}
+          image: ${{ steps.build.outputs.image }}
+
+      # ── Migrations ───────────────────────────────────────────────────────
+      # Register the new task definition first so the migration runs on the
+      # exact image that will be deployed — catches any model changes early.
+      - name: Register new web task definition
+        id: register-td
+        run: |
+          ARN=$(aws ecs register-task-definition \
+            --cli-input-json "file://${{ steps.task-def-web.outputs.task-definition }}" \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+          echo "arn=$ARN" >> $GITHUB_OUTPUT
+
+      - name: Run database migrations
+        id: migrate
+        run: |
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "${{ vars.ECS_CLUSTER }}" \
+            --task-definition "${{ steps.register-td.outputs.arn }}" \
+            --launch-type EC2 \
+            --overrides "{
+              \"containerOverrides\": [{
+                \"name\": \"${{ vars.CONTAINER_NAME }}\",
+                \"command\": [\"python\", \"manage.py\", \"migrate\", \"--noinput\"]
+              }]
+            }" \
+            --query 'tasks[0].taskArn' \
+            --output text)
+          echo "task_arn=$TASK_ARN" >> $GITHUB_OUTPUT
+          echo "Migration task started: $TASK_ARN"
+
+      - name: Wait for migrations to complete
+        run: |
+          aws ecs wait tasks-stopped \
+            --cluster "${{ vars.ECS_CLUSTER }}" \
+            --tasks "${{ steps.migrate.outputs.task_arn }}"
+
+          EXIT_CODE=$(aws ecs describe-tasks \
+            --cluster "${{ vars.ECS_CLUSTER }}" \
+            --tasks "${{ steps.migrate.outputs.task_arn }}" \
+            --query 'tasks[0].containers[0].exitCode' \
+            --output text)
+
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "Migrations failed with exit code $EXIT_CODE — aborting deploy"
+            exit 1
+          fi
+          echo "Migrations completed successfully"
+
+      # ── Deploy web service ───────────────────────────────────────────────
+      - name: Deploy web service
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.task-def-web.outputs.task-definition }}
+          service: ${{ vars.ECS_SERVICE_WEB }}
+          cluster: ${{ vars.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      # ── Deploy celery service (same image, separate task definition) ─────
+      - name: Download current celery task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition ${{ vars.ECS_TASK_DEFINITION_CELERY }} \
+            --query taskDefinition \
+            > task-def-celery.json
+
+      - name: Inject new image into celery task definition
+        id: task-def-celery
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-def-celery.json
+          container-name: ${{ vars.CONTAINER_NAME }}
+          image: ${{ steps.build.outputs.image }}
+
+      - name: Deploy celery service
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.task-def-celery.outputs.task-definition }}
+          service: ${{ vars.ECS_SERVICE_CELERY }}
+          cluster: ${{ vars.ECS_CLUSTER }}
+          wait-for-service-stability: true
