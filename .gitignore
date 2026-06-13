@@ -8,3 +8,6 @@ data/
 *.jpg
 *.png
 *.jpeg
+.env*
+!.env.example
+secrets
