@@ -1,0 +1,6 @@
+[
+  {"model": "content.country", "pk": "IN", "fields": {"name": "India"}},
+  {"model": "content.country", "pk": "JP", "fields": {"name": "Japan"}},
+  {"model": "content.country", "pk": "NL", "fields": {"name": "Netherlands"}},
+  {"model": "content.country", "pk": "US", "fields": {"name": "United States"}}
+]
