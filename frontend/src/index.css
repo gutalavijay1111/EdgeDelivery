@@ -1,0 +1,55 @@
+/* Design tokens — carried over from the original index.html */
+:root {
+  --bg:           #fffdf2;
+  --bg-card:      #ffffff;
+  --bg-inspector: #F1E4DE;
+  --bg-modal:     #fffdf2;
+  --bg-btn:       #F1E4DE;
+
+  --border:       #e8d8d0;
+  --border-card:  #ede0d8;
+
+  --text:         #242523;
+  --text-muted:   #9a8f87;
+
+  --amber:        #dda15e;
+  --amber-dark:   #b8782a;
+
+  --hit:          #5a8a50;
+  --miss:         #c0622a;
+
+  --shadow:       0 2px 8px rgba(36,37,35,0.07), 0 8px 24px rgba(36,37,35,0.05);
+  --shadow-lg:    0 12px 40px rgba(36,37,35,0.15);
+}
+
+[data-theme="dark"] {
+  --bg:           #1c1a16;
+  --bg-card:      #1e1c18;
+  --bg-inspector: #161410;
+  --bg-modal:     #211f1b;
+  --bg-btn:       #2a2720;
+
+  --border:       #352f26;
+  --border-card:  #2e2820;
+
+  --text:         #fffdf2;
+  --text-muted:   #6b6358;
+
+  --shadow:       0 2px 8px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.2);
+  --shadow-lg:    0 12px 40px rgba(0,0,0,0.5);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  min-height: 100vh;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+.animate-fade-in { animation: fade-in 0.3s ease both; }
