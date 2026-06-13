@@ -9,5 +9,4 @@ data/
 *.png
 *.jpeg
 .env*
-!.env.example
 secrets
