@@ -10,3 +10,12 @@ data/
 *.jpeg
 .env*
 secrets
+node_modules/
+dist/
+build/
+*.log
+*.pot
+*.mo
+*.db
+*.sqlite3
+*.bak
