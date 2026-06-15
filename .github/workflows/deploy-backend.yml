@@ -7,6 +7,7 @@ on:
       - "backend/**"
       - "poster_generators/**"
       - ".github/workflows/deploy-backend.yml"
+  workflow_dispatch:
 
 # Required GitHub Actions Variables (set in repo Settings → Variables):
 #   AWS_REGION               e.g. ap-south-1
