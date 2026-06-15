@@ -24,12 +24,13 @@ on:
 #   AWS_SECRET_ACCESS_KEY
 
 env:
-  AWS_REGION: ap-south-1
+  AWS_REGION: ${{ vars.AWS_REGION }}
 
 jobs:
   deploy:
     name: Build → Migrate → Deploy
     runs-on: ubuntu-latest
+    environment: Secret env
 
     steps:
       - name: Checkout
