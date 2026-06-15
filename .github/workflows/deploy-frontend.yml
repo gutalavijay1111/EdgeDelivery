@@ -21,7 +21,7 @@ on:
 #   AWS_SECRET_ACCESS_KEY
 
 env:
-  AWS_REGION: ${{ vars.AWS_REGION }}
+  AWS_REGION: ap-south-1
 
 jobs:
   deploy:
