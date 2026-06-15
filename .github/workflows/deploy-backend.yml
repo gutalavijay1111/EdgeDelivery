@@ -100,7 +100,7 @@ jobs:
       - name: Register migration task definition
         id: register-td
         run: |
-          jq '.containerDefinitions[0].portMappings = []' \
+          jq '.containerDefinitions[0].portMappings = [] | .family = "edgedelivery-migrate"' \
             "${{ steps.task-def-web.outputs.task-definition }}" > task-def-migrate.json
           ARN=$(aws ecs register-task-definition \
             --cli-input-json file://task-def-migrate.json \
