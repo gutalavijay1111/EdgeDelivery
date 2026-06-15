@@ -95,13 +95,15 @@ jobs:
             --cluster "${{ vars.ECS_CLUSTER }}" \
             --services "${{ vars.ECS_SERVICE_CELERY }}"
 
-      # Register the new task definition first so the migration runs on the
-      # exact image that will be deployed — catches any model changes early.
-      - name: Register new web task definition
+      # Register a port-free variant for migrations — the web container already
+      # owns port 8000, so a task with portMappings can't be placed alongside it.
+      - name: Register migration task definition
         id: register-td
         run: |
+          jq '.containerDefinitions[0].portMappings = []' \
+            "${{ steps.task-def-web.outputs.task-definition }}" > task-def-migrate.json
           ARN=$(aws ecs register-task-definition \
-            --cli-input-json "file://${{ steps.task-def-web.outputs.task-definition }}" \
+            --cli-input-json file://task-def-migrate.json \
             --query 'taskDefinition.taskDefinitionArn' \
             --output text)
           echo "arn=$ARN" >> $GITHUB_OUTPUT
