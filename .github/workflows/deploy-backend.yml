@@ -82,6 +82,15 @@ jobs:
           image: ${{ steps.build.outputs.image }}
 
       # ── Migrations ───────────────────────────────────────────────────────
+      # Scale celery to 0 first — frees memory on the t3.micro so the
+      # migration task has room to start alongside the running web container.
+      - name: Scale down celery
+        run: |
+          aws ecs update-service \
+            --cluster "${{ vars.ECS_CLUSTER }}" \
+            --service "${{ vars.ECS_SERVICE_CELERY }}" \
+            --desired-count 0
+
       # Register the new task definition first so the migration runs on the
       # exact image that will be deployed — catches any model changes early.
       - name: Register new web task definition
@@ -161,3 +170,11 @@ jobs:
           service: ${{ vars.ECS_SERVICE_CELERY }}
           cluster: ${{ vars.ECS_CLUSTER }}
           wait-for-service-stability: true
+
+      - name: Scale celery back up
+        if: always()
+        run: |
+          aws ecs update-service \
+            --cluster "${{ vars.ECS_CLUSTER }}" \
+            --service "${{ vars.ECS_SERVICE_CELERY }}" \
+            --desired-count 1
