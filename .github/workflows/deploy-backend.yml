@@ -90,6 +90,10 @@ jobs:
             --cluster "${{ vars.ECS_CLUSTER }}" \
             --service "${{ vars.ECS_SERVICE_CELERY }}" \
             --desired-count 0
+          # Wait until the celery task has actually stopped before continuing
+          aws ecs wait services-stable \
+            --cluster "${{ vars.ECS_CLUSTER }}" \
+            --services "${{ vars.ECS_SERVICE_CELERY }}"
 
       # Register the new task definition first so the migration runs on the
       # exact image that will be deployed — catches any model changes early.
@@ -105,7 +109,7 @@ jobs:
       - name: Run database migrations
         id: migrate
         run: |
-          TASK_ARN=$(aws ecs run-task \
+          RESULT=$(aws ecs run-task \
             --cluster "${{ vars.ECS_CLUSTER }}" \
             --task-definition "${{ steps.register-td.outputs.arn }}" \
             --launch-type EC2 \
@@ -114,9 +118,16 @@ jobs:
                 \"name\": \"${{ vars.CONTAINER_NAME }}\",
                 \"command\": [\"python\", \"manage.py\", \"migrate\", \"--noinput\"]
               }]
-            }" \
-            --query 'tasks[0].taskArn' \
-            --output text)
+            }")
+
+          FAILURES=$(echo "$RESULT" | jq -r '.failures | length')
+          if [ "$FAILURES" -gt 0 ]; then
+            echo "Task failed to be placed:"
+            echo "$RESULT" | jq '.failures'
+            exit 1
+          fi
+
+          TASK_ARN=$(echo "$RESULT" | jq -r '.tasks[0].taskArn')
           echo "task_arn=$TASK_ARN" >> $GITHUB_OUTPUT
           echo "Migration task started: $TASK_ARN"
 
