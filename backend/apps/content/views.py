@@ -108,6 +108,21 @@ class ContentStatusView(APIView):
         return Response(ContentStatusSerializer(content).data)
 
 
+class MyContentView(APIView):
+    """
+    GET /api/content/my/
+    Returns all content uploaded by the authenticated user, newest first.
+    """
+
+    def get(self, request):
+        content = (
+            Content.objects.filter(uploaded_by=request.user)
+            .order_by("-created_at")
+            .select_related("country")
+        )
+        return Response(ContentSerializer(content, many=True).data)
+
+
 class ExploreView(APIView):
     """
     GET /api/explore/
