@@ -1,5 +1,26 @@
 name: Deploy Backend
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Smart deploy: only runs the steps that the diff actually requires.
+#
+#   • migrations  → only when backend/apps/*/migrations/*.py changed
+#   • celery      → only when tasks.py, poster_generators/, or content
+#                   migrations changed (celery writes to the Content model)
+#   • web         → always (this workflow only fires on backend changes)
+#
+# Docker layers are cached in GitHub Actions cache, so an unchanged
+# requirements.txt won't re-pip-install on every push.
+#
+# Required GitHub Actions Variables (Settings → Variables):
+#   AWS_REGION, ECR_REPOSITORY, ECS_CLUSTER
+#   ECS_SERVICE_WEB, ECS_SERVICE_CELERY
+#   ECS_TASK_DEFINITION_WEB, ECS_TASK_DEFINITION_CELERY
+#   CONTAINER_NAME
+#
+# Required Secrets:
+#   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+# ─────────────────────────────────────────────────────────────────────────────
+
 on:
   push:
     branches: [main]
@@ -8,186 +29,222 @@ on:
       - "poster_generators/**"
       - ".github/workflows/deploy-backend.yml"
   workflow_dispatch:
-
-# Required GitHub Actions Variables (set in repo Settings → Variables):
-#   AWS_REGION               e.g. ap-south-1
-#   ECR_REPOSITORY           e.g. edgedelivery-backend
-#   ECS_CLUSTER              e.g. edgedelivery-cluster
-#   ECS_SERVICE_WEB          e.g. edgedelivery-web
-#   ECS_SERVICE_CELERY       e.g. edgedelivery-celery
-#   ECS_TASK_DEFINITION_WEB     e.g. edgedelivery-web
-#   ECS_TASK_DEFINITION_CELERY  e.g. edgedelivery-celery
-#   CONTAINER_NAME           e.g. edgedelivery-app  (same name in both task defs)
-#
-# Required GitHub Actions Secrets:
-#   AWS_ACCESS_KEY_ID
-#   AWS_SECRET_ACCESS_KEY
+    inputs:
+      force_migrate:
+        description: "Force DB migrations (even without migration file changes)"
+        type: boolean
+        default: false
+      force_celery:
+        description: "Force celery redeploy (even without task changes)"
+        type: boolean
+        default: false
 
 env:
   AWS_REGION: ${{ vars.AWS_REGION }}
 
 jobs:
   deploy:
-    name: Build → Migrate → Deploy
+    name: Smart Deploy
     runs-on: ubuntu-latest
     environment: Secret env
 
     steps:
+      # ── 1. Source ──────────────────────────────────────────────────────────
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2    # HEAD~1 is enough for change detection
 
+      # ── 2. Detect what this push actually changed ──────────────────────────
+      - name: Detect changed components
+        id: changes
+        run: |
+          # First commit on a branch has no HEAD~1 — fall back to all files
+          if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+            DIFF=$(git diff --name-only HEAD~1 HEAD)
+          else
+            DIFF=$(git ls-files)
+          fi
+          printf "=== Changed files ===\n%s\n=====================\n" "$DIFF"
+
+          # Migrations: any migration file that isn't __init__.py
+          needs_migrate=false
+          echo "$DIFF" | grep -qE "^backend/apps/.+/migrations/[^_]" && needs_migrate=true
+          [[ "${{ inputs.force_migrate }}" == "true" ]]                && needs_migrate=true
+
+          # Celery: tasks.py, poster_generators, or content migrations
+          # (the celery worker reads/writes Content — content schema changes need restart)
+          needs_celery=false
+          echo "$DIFF" | grep -qE "^(backend/apps/content/tasks\.py|poster_generators/)" && needs_celery=true
+          echo "$DIFF" | grep -qE "^backend/apps/content/migrations/[^_]"                && needs_celery=true
+          [[ "${{ inputs.force_celery }}" == "true" ]]                                   && needs_celery=true
+
+          echo "needs_migrate=$needs_migrate" | tee -a "$GITHUB_OUTPUT"
+          echo "needs_celery=$needs_celery"   | tee -a "$GITHUB_OUTPUT"
+          echo "::notice::migrate=$needs_migrate | celery=$needs_celery"
+
+      # ── 3. AWS auth ────────────────────────────────────────────────────────
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region:            ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
-        id: login-ecr
+        id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # ── Build ────────────────────────────────────────────────────────────
-      - name: Build and push Docker image
-        id: build
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker build \
-            -f backend/Dockerfile \
-            -t "$IMAGE_URI" \
-            -t "$ECR_REGISTRY/$ECR_REPOSITORY:latest" \
-            .
-          docker push "$IMAGE_URI"
-          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
-          echo "image=$IMAGE_URI" >> $GITHUB_OUTPUT
+      # ── 4. Build with layer cache ──────────────────────────────────────────
+      # GHA cache preserves pip-install and apt layers across pushes.
+      # On a typical push (requirements.txt unchanged) this saves ~60 seconds.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      # ── Prepare web task definition ──────────────────────────────────────
-      - name: Download current web task definition
+      - name: Build and push image
+        run: |
+          IMAGE_URI="${{ steps.ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}:${{ github.sha }}"
+          echo "IMAGE_URI=$IMAGE_URI" >> "$GITHUB_ENV"
+
+          docker buildx build \
+            --platform linux/amd64 \
+            --file  backend/Dockerfile \
+            --tag   "$IMAGE_URI" \
+            --tag   "${{ steps.ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}:latest" \
+            --cache-from "type=gha,scope=backend" \
+            --cache-to   "type=gha,scope=backend,mode=max" \
+            --push \
+            .
+
+      # ── 5. Patch web task definition (always needed) ───────────────────────
+      # Inject the new image and strip read-only fields in one jq pass.
+      # This file is reused by the migration step and the web deploy step.
+      - name: Prepare web task definition
         run: |
           aws ecs describe-task-definition \
-            --task-definition ${{ vars.ECS_TASK_DEFINITION_WEB }} \
+            --task-definition "${{ vars.ECS_TASK_DEFINITION_WEB }}" \
             --query taskDefinition \
-            > task-def-web.json
+          | jq --arg img "$IMAGE_URI" '
+              .containerDefinitions[0].image = $img
+              | del(.taskDefinitionArn, .revision, .status,
+                    .requiresAttributes, .compatibilities,
+                    .registeredAt, .registeredBy)
+            ' > /tmp/td-web.json
 
-      - name: Inject new image into web task definition
-        id: task-def-web
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition: task-def-web.json
-          container-name: ${{ vars.CONTAINER_NAME }}
-          image: ${{ steps.build.outputs.image }}
-
-      # ── Migrations ───────────────────────────────────────────────────────
-      # Scale celery to 0 first — frees memory on the t3.micro so the
-      # migration task has room to start alongside the running web container.
-      - name: Scale down celery
+      # ── 6. Migrations (only when migration files changed) ──────────────────
+      - name: Scale down celery before migrations
+        if: steps.changes.outputs.needs_migrate == 'true'
+        # Frees RAM on the t3.micro so the migration task can start
+        # alongside the still-running web container.
         run: |
           aws ecs update-service \
             --cluster "${{ vars.ECS_CLUSTER }}" \
             --service "${{ vars.ECS_SERVICE_CELERY }}" \
             --desired-count 0
-          # Wait until the celery task has actually stopped before continuing
           aws ecs wait services-stable \
-            --cluster "${{ vars.ECS_CLUSTER }}" \
+            --cluster  "${{ vars.ECS_CLUSTER }}" \
             --services "${{ vars.ECS_SERVICE_CELERY }}"
 
-      # Register a port-free variant for migrations — the web container already
-      # owns port 8000, so a task with portMappings can't be placed alongside it.
-      - name: Register migration task definition
-        id: register-td
+      - name: Run database migrations
+        if: steps.changes.outputs.needs_migrate == 'true'
         run: |
+          # Port-free task definition so it can co-exist with the web container
           jq '.containerDefinitions[0].portMappings = [] | .family = "edgedelivery-migrate"' \
-            "${{ steps.task-def-web.outputs.task-definition }}" > task-def-migrate.json
-          ARN=$(aws ecs register-task-definition \
-            --cli-input-json file://task-def-migrate.json \
+            /tmp/td-web.json > /tmp/td-migrate.json
+
+          MIGRATE_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file:///tmp/td-migrate.json \
             --query 'taskDefinition.taskDefinitionArn' \
             --output text)
-          echo "arn=$ARN" >> $GITHUB_OUTPUT
 
-      - name: Run database migrations
-        id: migrate
-        run: |
           RESULT=$(aws ecs run-task \
-            --cluster "${{ vars.ECS_CLUSTER }}" \
-            --task-definition "${{ steps.register-td.outputs.arn }}" \
-            --launch-type EC2 \
+            --cluster         "${{ vars.ECS_CLUSTER }}" \
+            --task-definition "$MIGRATE_ARN" \
+            --launch-type     EC2 \
             --overrides "{
               \"containerOverrides\": [{
-                \"name\": \"${{ vars.CONTAINER_NAME }}\",
-                \"command\": [\"python\", \"manage.py\", \"migrate\", \"--noinput\"]
+                \"name\":    \"${{ vars.CONTAINER_NAME }}\",
+                \"command\": [\"python\",\"manage.py\",\"migrate\",\"--noinput\"]
               }]
             }")
 
-          FAILURES=$(echo "$RESULT" | jq -r '.failures | length')
-          if [ "$FAILURES" -gt 0 ]; then
-            echo "Task failed to be placed:"
+          if [ "$(echo "$RESULT" | jq '.failures | length')" -gt 0 ]; then
             echo "$RESULT" | jq '.failures'
             exit 1
           fi
 
           TASK_ARN=$(echo "$RESULT" | jq -r '.tasks[0].taskArn')
-          echo "task_arn=$TASK_ARN" >> $GITHUB_OUTPUT
-          echo "Migration task started: $TASK_ARN"
-
-      - name: Wait for migrations to complete
-        run: |
           aws ecs wait tasks-stopped \
             --cluster "${{ vars.ECS_CLUSTER }}" \
-            --tasks "${{ steps.migrate.outputs.task_arn }}"
+            --tasks   "$TASK_ARN"
 
           EXIT_CODE=$(aws ecs describe-tasks \
             --cluster "${{ vars.ECS_CLUSTER }}" \
-            --tasks "${{ steps.migrate.outputs.task_arn }}" \
-            --query 'tasks[0].containers[0].exitCode' \
+            --tasks   "$TASK_ARN" \
+            --query   'tasks[0].containers[0].exitCode' \
+            --output  text)
+
+          [ "$EXIT_CODE" != "0" ] && echo "Migrations failed (exit $EXIT_CODE)" && exit 1
+          echo "Migrations completed"
+
+      # ── 7. Deploy web (always) ─────────────────────────────────────────────
+      - name: Deploy web service
+        run: |
+          NEW_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file:///tmp/td-web.json \
+            --query 'taskDefinition.taskDefinitionArn' \
             --output text)
 
-          if [ "$EXIT_CODE" != "0" ]; then
-            echo "Migrations failed with exit code $EXIT_CODE — aborting deploy"
-            exit 1
-          fi
-          echo "Migrations completed successfully"
+          aws ecs update-service \
+            --cluster         "${{ vars.ECS_CLUSTER }}" \
+            --service         "${{ vars.ECS_SERVICE_WEB }}" \
+            --task-definition "$NEW_ARN"
 
-      # ── Deploy web service ───────────────────────────────────────────────
-      - name: Deploy web service
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
-        with:
-          task-definition: ${{ steps.task-def-web.outputs.task-definition }}
-          service: ${{ vars.ECS_SERVICE_WEB }}
-          cluster: ${{ vars.ECS_CLUSTER }}
-          wait-for-service-stability: true
+          aws ecs wait services-stable \
+            --cluster  "${{ vars.ECS_CLUSTER }}" \
+            --services "${{ vars.ECS_SERVICE_WEB }}"
 
-      # ── Deploy celery service (same image, separate task definition) ─────
-      - name: Download current celery task definition
+      # ── 8. Deploy celery (only when tasks or content schema changed) ────────
+      - name: Deploy celery service
+        if: steps.changes.outputs.needs_celery == 'true'
         run: |
           aws ecs describe-task-definition \
-            --task-definition ${{ vars.ECS_TASK_DEFINITION_CELERY }} \
+            --task-definition "${{ vars.ECS_TASK_DEFINITION_CELERY }}" \
             --query taskDefinition \
-            > task-def-celery.json
+          | jq --arg img "$IMAGE_URI" '
+              .containerDefinitions[0].image = $img
+              | del(.taskDefinitionArn, .revision, .status,
+                    .requiresAttributes, .compatibilities,
+                    .registeredAt, .registeredBy)
+            ' > /tmp/td-celery.json
 
-      - name: Inject new image into celery task definition
-        id: task-def-celery
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition: task-def-celery.json
-          container-name: ${{ vars.CONTAINER_NAME }}
-          image: ${{ steps.build.outputs.image }}
+          NEW_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file:///tmp/td-celery.json \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
 
-      - name: Deploy celery service
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
-        with:
-          task-definition: ${{ steps.task-def-celery.outputs.task-definition }}
-          service: ${{ vars.ECS_SERVICE_CELERY }}
-          cluster: ${{ vars.ECS_CLUSTER }}
-          wait-for-service-stability: true
+          # --desired-count 1 also covers the case where celery was scaled
+          # down for migrations but doesn't need a full redeploy
+          aws ecs update-service \
+            --cluster         "${{ vars.ECS_CLUSTER }}" \
+            --service         "${{ vars.ECS_SERVICE_CELERY }}" \
+            --task-definition "$NEW_ARN" \
+            --desired-count   1
 
-      - name: Scale celery back up
-        if: always()
+          aws ecs wait services-stable \
+            --cluster  "${{ vars.ECS_CLUSTER }}" \
+            --services "${{ vars.ECS_SERVICE_CELERY }}"
+
+      # ── 9. Restore celery if it was scaled down but not redeployed ─────────
+      # Fires when: migrations ran (celery was scaled to 0) but tasks didn't
+      # change (celery deploy was skipped). We just need it running again.
+      - name: Restore celery after migrations
+        if: |
+          always() &&
+          steps.changes.outputs.needs_migrate == 'true' &&
+          steps.changes.outputs.needs_celery  != 'true'
         run: |
           aws ecs update-service \
-            --cluster "${{ vars.ECS_CLUSTER }}" \
-            --service "${{ vars.ECS_SERVICE_CELERY }}" \
+            --cluster       "${{ vars.ECS_CLUSTER }}" \
+            --service       "${{ vars.ECS_SERVICE_CELERY }}" \
             --desired-count 1
