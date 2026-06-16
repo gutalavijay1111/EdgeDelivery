@@ -1,23 +1,29 @@
 import { useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { getCountries, getPresignedUrl, confirmUpload, getContentStatus } from "../api/content";
 import { useQuery } from "@tanstack/react-query";
+import { getCountries, getPresignedUrl, confirmUpload } from "../api/content";
+import { useAuth } from "../contexts/AuthContext";
 
-type Stage = "idle" | "uploading" | "processing" | "done" | "error";
+interface Props {
+  onClose: () => void;
+  onUploaded: (contentId: string) => void;
+  defaultCountry?: string;
+}
 
-export default function UploadModal({ onClose }: { onClose: () => void }) {
+export default function UploadModal({ onClose, onUploaded, defaultCountry }: Props) {
+  const { user } = useAuth();
   const [file, setFile] = useState<File | null>(null);
-  const [country, setCountry] = useState("");
-  const [stage, setStage] = useState<Stage>("idle");
+  const [country, setCountry] = useState(
+    defaultCountry || user?.country || ""
+  );
+  const [uploading, setUploading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
-  const queryClient = useQueryClient();
 
   const { data: countries } = useQuery({ queryKey: ["countries"], queryFn: getCountries });
 
   const handleUpload = async () => {
     if (!file || !country) return;
-    setStage("uploading");
+    setUploading(true);
     setErrorMsg("");
 
     try {
@@ -30,24 +36,13 @@ export default function UploadModal({ onClose }: { onClose: () => void }) {
       });
 
       await confirmUpload(content_id);
-      setStage("processing");
 
-      // Poll every 4 seconds until ready or failed
-      const timer = setInterval(async () => {
-        const { status } = await getContentStatus(content_id);
-        if (status === "ready") {
-          clearInterval(timer);
-          setStage("done");
-          queryClient.invalidateQueries({ queryKey: ["content"] });
-        } else if (status === "failed") {
-          clearInterval(timer);
-          setErrorMsg("Poster generation failed. Try a different image.");
-          setStage("error");
-        }
-      }, 4000);
+      // Hand off to parent for background polling + toast, then close
+      onUploaded(content_id);
+      onClose();
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : "Upload failed");
-      setStage("error");
+      setErrorMsg(err instanceof Error ? err.message : "Upload failed. Try again.");
+      setUploading(false);
     }
   };
 
@@ -70,7 +65,7 @@ export default function UploadModal({ onClose }: { onClose: () => void }) {
     backgroundColor: "var(--bg-btn)", border: "1px solid var(--border)",
     borderRadius: "6px", color: "var(--text)", fontFamily: "DM Sans", fontSize: "0.9rem",
   };
-  const btn = (disabled = false): React.CSSProperties => ({
+  const btnStyle = (disabled = false): React.CSSProperties => ({
     width: "100%", padding: "0.65rem",
     backgroundColor: disabled ? "var(--bg-btn)" : "var(--amber)",
     color: disabled ? "var(--text-muted)" : "#fff",
@@ -78,6 +73,8 @@ export default function UploadModal({ onClose }: { onClose: () => void }) {
     cursor: disabled ? "not-allowed" : "pointer",
     fontFamily: "DM Sans", fontSize: "0.95rem", fontWeight: 600,
   });
+
+  const isDisabled = !file || !country || uploading;
 
   return (
     <div style={overlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -91,83 +88,45 @@ export default function UploadModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        {stage === "idle" && (
-          <>
-            <div style={{ marginBottom: "1rem" }}>
-              <label style={label}>IMAGE FILE</label>
-              <div
-                onClick={() => inputRef.current?.click()}
-                style={{
-                  border: "2px dashed var(--border)", borderRadius: "8px",
-                  padding: "1.5rem", textAlign: "center", cursor: "pointer",
-                  color: file ? "var(--text)" : "var(--text-muted)",
-                  transition: "border-color 0.2s",
-                }}
-              >
-                {file ? `✓ ${file.name}` : "Click to select .jpg / .png / .webp"}
-              </div>
-              <input
-                ref={inputRef}
-                type="file"
-                accept=".jpg,.jpeg,.png,.webp"
-                style={{ display: "none" }}
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              />
-            </div>
-
-            <div style={{ marginBottom: "1.5rem" }}>
-              <label style={label}>COUNTRY</label>
-              <select value={country} onChange={(e) => setCountry(e.target.value)} style={input}>
-                <option value="">Select a country…</option>
-                {countries?.map((c) => (
-                  <option key={c.code} value={c.code}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <button onClick={handleUpload} disabled={!file || !country} style={btn(!file || !country)}>
-              Generate Poster
-            </button>
-          </>
-        )}
-
-        {stage === "uploading" && (
-          <div style={{ textAlign: "center", padding: "1rem 0" }}>
-            <p style={{ color: "var(--text-muted)" }}>Uploading to S3…</p>
+        <div style={{ marginBottom: "1rem" }}>
+          <label style={label}>IMAGE FILE</label>
+          <div
+            onClick={() => inputRef.current?.click()}
+            style={{
+              border: "2px dashed var(--border)", borderRadius: "8px",
+              padding: "1.5rem", textAlign: "center", cursor: "pointer",
+              color: file ? "var(--text)" : "var(--text-muted)",
+              transition: "border-color 0.2s",
+            }}
+          >
+            {file ? `✓ ${file.name}` : "Click to select .jpg / .png / .webp"}
           </div>
+          <input
+            ref={inputRef}
+            type="file"
+            accept=".jpg,.jpeg,.png,.webp"
+            style={{ display: "none" }}
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          />
+        </div>
+
+        <div style={{ marginBottom: "1.5rem" }}>
+          <label style={label}>COUNTRY</label>
+          <select value={country} onChange={(e) => setCountry(e.target.value)} style={input}>
+            <option value="">Select a country…</option>
+            {countries?.map((c) => (
+              <option key={c.code} value={c.code}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {errorMsg && (
+          <p style={{ color: "var(--miss)", fontSize: "0.8rem", marginBottom: "0.75rem" }}>{errorMsg}</p>
         )}
 
-        {stage === "processing" && (
-          <div style={{ textAlign: "center", padding: "1rem 0" }}>
-            <div style={{
-              width: "40px", height: "40px", margin: "0 auto 1rem",
-              border: "3px solid var(--border)", borderTopColor: "var(--amber)",
-              borderRadius: "50%", animation: "spin 0.8s linear infinite",
-            }} />
-            <p style={{ color: "var(--text)", fontWeight: 600 }}>Generating poster…</p>
-            <p style={{ color: "var(--text-muted)", fontSize: "0.8rem", marginTop: "0.4rem" }}>
-              Gemini is analysing your image — usually 30–60 seconds
-            </p>
-          </div>
-        )}
-
-        {stage === "done" && (
-          <div style={{ textAlign: "center", padding: "1rem 0" }}>
-            <p style={{ fontSize: "2rem" }}>🎬</p>
-            <p style={{ color: "var(--hit)", fontWeight: 600, marginTop: "0.5rem" }}>Poster ready!</p>
-            <button onClick={onClose} style={{ ...btn(), marginTop: "1rem" }}>View in explore</button>
-          </div>
-        )}
-
-        {stage === "error" && (
-          <div style={{ textAlign: "center", padding: "1rem 0" }}>
-            <p style={{ color: "var(--miss)", fontWeight: 600 }}>Something went wrong</p>
-            <p style={{ color: "var(--text-muted)", fontSize: "0.8rem", margin: "0.5rem 0 1rem" }}>{errorMsg}</p>
-            <button onClick={() => setStage("idle")} style={{ ...btn(), backgroundColor: "var(--bg-btn)", color: "var(--text)" }}>
-              Try again
-            </button>
-          </div>
-        )}
+        <button onClick={handleUpload} disabled={isDisabled} style={btnStyle(isDisabled)}>
+          {uploading ? "Uploading…" : "Generate Poster"}
+        </button>
       </div>
     </div>
   );

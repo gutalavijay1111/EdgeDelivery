@@ -41,7 +41,7 @@ export default function LoginPage() {
           ? await login(form.username, form.password)
           : await register(form);
       setAuth(tokens.access, tokens.refresh);
-      navigate("/explore");
+      navigate("/");
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } }).response?.data?.error;
       setError(msg ?? "Something went wrong");
@@ -54,7 +54,7 @@ export default function LoginPage() {
     try {
       const tokens = await googleAuth(credential);
       setAuth(tokens.access, tokens.refresh);
-      navigate("/explore");
+      navigate("/");
     } catch {
       setError("Google sign-in failed");
     }

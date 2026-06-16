@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, NavLink } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 
 const CDN = import.meta.env.VITE_CDN_DOMAIN ? `https://${import.meta.env.VITE_CDN_DOMAIN}` : "";
@@ -10,11 +10,17 @@ export default function Navbar({ onUpload }: { onUpload: () => void }) {
   const [dark, setDark] = useState(
     document.documentElement.dataset.theme === "dark"
   );
+  const [logoError, setLogoError] = useState(false);
 
   const toggleTheme = () => {
     const next = dark ? "light" : "dark";
     document.documentElement.dataset.theme = next;
     setDark(!dark);
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
   };
 
   return (
@@ -32,18 +38,44 @@ export default function Navbar({ onUpload }: { onUpload: () => void }) {
       }}
     >
       {/* Logo */}
-      <button
-        onClick={() => navigate("/explore")}
-        style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}
-      >
-        {CDN ? (
-          <img src={`${CDN}/assets/logo.png`} alt="EdgeDelivery" style={{ height: "32px" }} />
-        ) : (
-          <span style={{ fontFamily: "Bebas Neue", fontSize: "1.5rem", color: "var(--text)" }}>
-            EDGE
-          </span>
+      <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
+        <button
+          onClick={() => navigate(user ? "/" : "/login")}
+          style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}
+        >
+          {CDN && !logoError ? (
+            <img
+              src={`${CDN}/assets/logo.png`}
+              alt="EdgeDelivery"
+              style={{ height: "32px" }}
+              onError={() => setLogoError(true)}
+            />
+          ) : (
+            <span style={{ fontFamily: "Bebas Neue", fontSize: "1.5rem", color: "var(--text)" }}>
+              EDGE
+            </span>
+          )}
+        </button>
+
+        {/* Nav links */}
+        {user && (
+          <div style={{ display: "flex", gap: "0.25rem" }}>
+            <NavLink
+              to="/"
+              end
+              style={({ isActive }) => navLinkStyle(isActive)}
+            >
+              My Uploads
+            </NavLink>
+            <NavLink
+              to="/explore"
+              style={({ isActive }) => navLinkStyle(isActive)}
+            >
+              Explore
+            </NavLink>
+          </div>
         )}
-      </button>
+      </div>
 
       {/* Right actions */}
       <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
@@ -81,7 +113,7 @@ export default function Navbar({ onUpload }: { onUpload: () => void }) {
               <span style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>{user.username}</span>
             </div>
             <button
-              onClick={logout}
+              onClick={handleLogout}
               style={{
                 background: "none", border: "1px solid var(--border)",
                 borderRadius: "6px", padding: "0.4rem 0.75rem", cursor: "pointer",
@@ -106,4 +138,20 @@ export default function Navbar({ onUpload }: { onUpload: () => void }) {
       </div>
     </nav>
   );
+}
+
+function navLinkStyle(isActive: boolean): React.CSSProperties {
+  return {
+    padding: "0.35rem 0.75rem",
+    borderRadius: "6px",
+    fontSize: "0.88rem",
+    fontFamily: "DM Sans",
+    fontWeight: isActive ? 600 : 400,
+    color: isActive ? "var(--text)" : "var(--text-muted)",
+    backgroundColor: isActive ? "var(--bg-btn)" : "transparent",
+    border: "none",
+    textDecoration: "none",
+    cursor: "pointer",
+    transition: "color 0.15s, background-color 0.15s",
+  };
 }

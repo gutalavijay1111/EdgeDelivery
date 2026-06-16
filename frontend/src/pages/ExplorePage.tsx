@@ -1,10 +1,17 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getCountries, getCountryContent } from "../api/content";
+import type { ContentItem } from "../api/content";
 import ContentCard from "../components/ContentCard";
+import ContentDetailModal from "../components/ContentDetailModal";
 
-export default function ExplorePage() {
-  const [selected, setSelected] = useState<string | null>(null);
+interface Props {
+  onCountryChange?: (code: string) => void;
+}
+
+export default function ExplorePage({ onCountryChange }: Props) {
+  const [selected, setSelected] = useState<string>("");
+  const [selectedItem, setSelectedItem] = useState<ContentItem | null>(null);
 
   const { data: countries, isLoading: loadingCountries } = useQuery({
     queryKey: ["countries"],
@@ -14,50 +21,71 @@ export default function ExplorePage() {
 
   const { data: countryData, isLoading: loadingContent } = useQuery({
     queryKey: ["content", selected],
-    queryFn: () => getCountryContent(selected!),
+    queryFn: () => getCountryContent(selected),
     enabled: !!selected,
   });
 
+  const handleCountryChange = (code: string) => {
+    setSelected(code);
+    onCountryChange?.(code);
+  };
+
   return (
     <div style={{ minHeight: "calc(100vh - 60px)" }}>
-      {/* Country selector strip */}
+      {/* Country selector */}
       <div
         style={{
-          display: "flex", gap: "0.5rem", padding: "1rem 2rem",
-          borderBottom: "1px solid var(--border)", overflowX: "auto",
+          display: "flex",
+          alignItems: "center",
+          gap: "0.75rem",
+          padding: "1rem 2rem",
+          borderBottom: "1px solid var(--border)",
           backgroundColor: "var(--bg)",
         }}
       >
-        {loadingCountries && (
-          <span style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>Loading…</span>
+        <label style={{ color: "var(--text-muted)", fontSize: "0.85rem", whiteSpace: "nowrap" }}>
+          Region
+        </label>
+        <select
+          value={selected}
+          onChange={(e) => handleCountryChange(e.target.value)}
+          disabled={loadingCountries}
+          style={{
+            padding: "0.45rem 0.75rem",
+            backgroundColor: "var(--bg-btn)",
+            border: "1px solid var(--border)",
+            borderRadius: "6px",
+            color: "var(--text)",
+            fontFamily: "DM Sans",
+            fontSize: "0.9rem",
+            cursor: "pointer",
+            minWidth: "200px",
+          }}
+        >
+          <option value="">Select a region…</option>
+          {countries?.map((c) => (
+            <option key={c.code} value={c.code}>
+              {c.name} ({c.content_count})
+            </option>
+          ))}
+        </select>
+
+        {selected && countryData && (
+          <span style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>
+            {countryData.content.length} poster{countryData.content.length !== 1 ? "s" : ""} · images via CloudFront CDN
+          </span>
         )}
-        {countries?.map((c) => (
-          <button
-            key={c.code}
-            onClick={() => setSelected(c.code)}
-            style={{
-              padding: "0.45rem 1.1rem", borderRadius: "999px", whiteSpace: "nowrap",
-              border: "1px solid var(--border)",
-              backgroundColor: selected === c.code ? "var(--amber)" : "var(--bg-btn)",
-              color: selected === c.code ? "#fff" : "var(--text)",
-              cursor: "pointer", fontFamily: "DM Sans", fontSize: "0.88rem",
-              transition: "background-color 0.15s, color 0.15s",
-            }}
-          >
-            {c.name}
-            <span style={{ marginLeft: "0.4rem", opacity: 0.6, fontSize: "0.8em" }}>
-              {c.content_count}
-            </span>
-          </button>
-        ))}
       </div>
 
       {/* Content grid */}
       <div style={{ padding: "1.5rem 2rem" }}>
-        {!selected && (
+        {!selected && !loadingCountries && (
           <div style={{ textAlign: "center", padding: "4rem 0" }}>
-            <p style={{ color: "var(--text-muted)", fontSize: "1rem" }}>
-              Select a country to explore content served from that region's CDN edge.
+            <p style={{ fontFamily: "Bebas Neue", fontSize: "1.8rem", color: "var(--text)", marginBottom: "0.5rem" }}>
+              Pick a region
+            </p>
+            <p style={{ color: "var(--text-muted)", fontSize: "0.95rem" }}>
+              Hover a card to see CDN edge latency vs browser cache.
             </p>
           </div>
         )}
@@ -78,32 +106,28 @@ export default function ExplorePage() {
 
         {countryData && (
           <>
-            <p style={{ color: "var(--text-muted)", fontSize: "0.8rem", marginBottom: "1rem" }}>
-              {countryData.content.length} title{countryData.content.length !== 1 ? "s" : ""} from{" "}
-              <strong style={{ color: "var(--text)" }}>{countryData.country_name}</strong> —
-              images served via CloudFront. Hover a card to see latency difference between a CDN
-              cache MISS and HIT.
-            </p>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
-                gap: "1rem",
-              }}
-            >
-              {countryData.content.map((item) => (
-                <ContentCard key={item.id} item={item} />
-              ))}
-            </div>
-
-            {countryData.content.length === 0 && (
+            {countryData.content.length === 0 ? (
               <p style={{ color: "var(--text-muted)", textAlign: "center", marginTop: "2rem" }}>
                 No content yet for this region. Upload an image to get started.
               </p>
+            ) : (
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+                gap: "1rem",
+              }}>
+                {countryData.content.map((item) => (
+                  <ContentCard key={item.id} item={item} onClick={setSelectedItem} />
+                ))}
+              </div>
             )}
           </>
         )}
       </div>
+
+      {selectedItem && (
+        <ContentDetailModal item={selectedItem} onClose={() => setSelectedItem(null)} />
+      )}
     </div>
   );
 }

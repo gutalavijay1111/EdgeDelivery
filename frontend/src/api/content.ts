@@ -12,6 +12,7 @@ export interface ContentItem {
   uploaded_by: string | null;
   poster_metadata: Record<string, unknown>;
   created_at: string;
+  processed_at: string | null;
 }
 
 export interface CountryContent { country: string; country_name: string; content: ContentItem[] }
@@ -38,3 +39,6 @@ export const getContentStatus = (content_id: string) =>
       `/api/content/${content_id}/status/`
     )
     .then((r) => r.data);
+
+export const getMyContent = () =>
+  api.get<ContentItem[]>("/api/content/my/").then((r) => r.data);
