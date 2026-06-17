@@ -6,7 +6,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import boto3
+import requests as http_requests
 from celery import shared_task
+from celery.exceptions import MaxRetriesExceededError
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -84,6 +86,45 @@ def generate_poster(self, content_id: str):
         logger.exception("Poster generation failed for content %s", content_id)
         Content.objects.filter(id=content_id).update(status=Content.STATUS_FAILED)
         raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, max_retries=3)
+def fetch_and_store_image(self, content_id: str, source_url: str):
+    """Download image from source_url, upload to S3, then chain generate_poster."""
+    from apps.content.models import Content
+
+    try:
+        resp = http_requests.get(source_url, timeout=30, stream=True)
+        resp.raise_for_status()
+
+        ct = resp.headers.get("Content-Type", "image/jpeg").split(";")[0].strip()
+        ext = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}.get(ct, ".jpg")
+
+        content = Content.objects.select_related("country").get(id=content_id)
+        raw_key = f"raw/{content.country.code}/{content_id}{ext}"
+
+        s3 = boto3.client("s3", region_name=settings.AWS_REGION)
+        s3.put_object(
+            Bucket=settings.AWS_S3_BUCKET,
+            Key=raw_key,
+            Body=resp.content,
+            ContentType=ct,
+        )
+
+        content.raw_s3_key = raw_key
+        content.status = Content.STATUS_PROCESSING
+        content.save(update_fields=["raw_s3_key", "status"])
+
+        generate_poster.delay(content_id)
+
+    except Exception as exc:
+        logger.exception("fetch_and_store_image failed for %s", content_id)
+        countdown = 60 * (2 ** self.request.retries)
+        try:
+            raise self.retry(exc=exc, countdown=countdown)
+        except MaxRetriesExceededError:
+            from apps.content.models import Content as C
+            C.objects.filter(id=content_id).update(status=C.STATUS_FAILED)
 
 
 def _invalidate_cloudfront(paths: list[str], caller_ref: str):

@@ -1,18 +1,31 @@
+import json
+import logging
 import os
+import time
 import uuid
 
 import boto3
+import requests as http_requests
 from django.conf import settings
 from django.db.models import Count, Q
+from django.http import HttpResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404
+from django.utils.decorators import method_decorator
+from django.views import View
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.request import Request as DRFRequest
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 
 from .models import Content, Country
 from .serializers import ContentSerializer, ContentStatusSerializer, CountrySerializer
-from .tasks import generate_poster
+from .tasks import fetch_and_store_image, generate_poster
+
+logger = logging.getLogger(__name__)
 
 _ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 _CONTENT_TYPES = {
@@ -163,3 +176,119 @@ class ExploreCountryView(APIView):
                 "content": ContentSerializer(content, many=True).data,
             }
         )
+
+
+def _fetch_unsplash_url(keyword: str = "") -> str:
+    key = getattr(settings, "UNSPLASH_ACCESS_KEY", "")
+    if not key:
+        raise ValueError("UNSPLASH_ACCESS_KEY not configured")
+    params = {"orientation": "landscape", "content_filter": "high"}
+    if keyword:
+        params["query"] = keyword
+    resp = http_requests.get(
+        "https://api.unsplash.com/photos/random",
+        headers={"Authorization": f"Client-ID {key}"},
+        params=params,
+        timeout=10,
+    )
+    resp.raise_for_status()
+    return resp.json()["urls"]["regular"]
+
+
+class FetchFromUrlView(APIView):
+    """
+    POST /api/content/upload/from-url/
+    Body: { country, source: "url"|"unsplash", url?, unsplash_keyword? }
+
+    Queues a Celery task to download the image and generate a poster.
+    The client should open the SSE stream endpoint to track progress.
+    """
+
+    def post(self, request):
+        country_code = request.data.get("country", "").upper()
+        source = request.data.get("source", "")
+        url = request.data.get("url", "").strip()
+        keyword = request.data.get("unsplash_keyword", "").strip()
+
+        country = get_object_or_404(Country, code=country_code)
+
+        if source == "url":
+            if not url:
+                return Response({"error": "url is required"}, status=status.HTTP_400_BAD_REQUEST)
+            if not url.startswith(("http://", "https://")):
+                return Response({"error": "url must start with http:// or https://"}, status=status.HTTP_400_BAD_REQUEST)
+        elif source == "unsplash":
+            try:
+                url = _fetch_unsplash_url(keyword)
+            except Exception:
+                logger.exception("Unsplash fetch failed")
+                return Response(
+                    {"error": "Failed to fetch image from Unsplash. Try again."},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+        else:
+            return Response({"error": "source must be 'url' or 'unsplash'"}, status=status.HTTP_400_BAD_REQUEST)
+
+        content_id = uuid.uuid4()
+        Content.objects.create(
+            id=content_id,
+            country=country,
+            raw_s3_key="",
+            source="user",
+            uploaded_by=request.user,
+            status=Content.STATUS_PENDING,
+        )
+
+        fetch_and_store_image.delay(str(content_id), url)
+
+        return Response({"content_id": str(content_id)}, status=status.HTTP_201_CREATED)
+
+
+def _jwt_user(django_request):
+    """Authenticate a plain Django request via JWT Bearer token."""
+    drf_request = DRFRequest(django_request)
+    try:
+        result = JWTAuthentication().authenticate(drf_request)
+        return result[0] if result else None
+    except (InvalidToken, TokenError):
+        return None
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class ContentStreamView(View):
+    """
+    GET /api/content/<uuid>/stream/
+
+    SSE endpoint — streams status updates every 2 s until the content
+    reaches a terminal state (ready / failed).  Max ~5 minutes.
+    """
+
+    def get(self, request, content_id):
+        user = _jwt_user(request)
+        if user is None:
+            return HttpResponse("Unauthorized", status=401)
+
+        def event_stream():
+            for _ in range(150):
+                try:
+                    content = Content.objects.get(id=content_id, uploaded_by=user)
+                    yield "data: {}\n\n".format(
+                        json.dumps(
+                            {
+                                "status": content.status,
+                                "thumbnail_url": content.thumbnail_url or "",
+                                "background_url": content.background_url or "",
+                            }
+                        )
+                    )
+                    if content.status in (Content.STATUS_READY, Content.STATUS_FAILED):
+                        break
+                except Content.DoesNotExist:
+                    yield 'data: {"status":"failed","error":"not found"}\n\n'
+                    break
+                time.sleep(2)
+
+        response = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
+        response["Cache-Control"] = "no-cache"
+        response["X-Accel-Buffering"] = "no"
+        return response
