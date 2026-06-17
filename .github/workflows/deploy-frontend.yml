@@ -48,6 +48,7 @@ jobs:
         working-directory: frontend
         env:
           VITE_API_BASE_URL: https://api.thisisvj.com
+          VITE_APP_URL: https://edge.thisisvj.com
           VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
           VITE_CDN_DOMAIN: ${{ vars.VITE_CDN_DOMAIN }}
         run: npm run build
