@@ -53,14 +53,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2    # HEAD~1 is enough for change detection
+          fetch-depth: 0    # full history so multi-commit pushes diff correctly
 
       # ── 2. Detect what this push actually changed ──────────────────────────
       - name: Detect changed components
         id: changes
         run: |
-          # First commit on a branch has no HEAD~1 — fall back to all files
-          if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+          # github.event.before is the SHA before the push — covers all commits
+          # in the push, not just the last one. Falls back to HEAD~1 for
+          # workflow_dispatch (no before SHA) and the very first push (null SHA).
+          BEFORE="${{ github.event.before }}"
+          NULL_SHA="0000000000000000000000000000000000000000"
+          if [[ -n "$BEFORE" && "$BEFORE" != "$NULL_SHA" ]]; then
+            DIFF=$(git diff --name-only "$BEFORE" HEAD)
+          elif git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
             DIFF=$(git diff --name-only HEAD~1 HEAD)
           else
             DIFF=$(git ls-files)
