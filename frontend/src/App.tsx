@@ -6,6 +6,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import Navbar from "./components/Navbar";
 import UploadModal from "./components/UploadModal";
 import Toast, { type ToastData } from "./components/Toast";
+import TutorialOverlay from "./components/TutorialOverlay";
 import LoginPage from "./pages/LoginPage";
 import HomePage from "./pages/HomePage";
 import ExplorePage from "./pages/ExplorePage";
@@ -91,6 +92,7 @@ export default function App() {
             )}
 
             <Toast toasts={toasts} onDismiss={dismissToast} />
+            <TutorialOverlay />
 
             <Routes>
               <Route path="/login" element={<LoginPage />} />
