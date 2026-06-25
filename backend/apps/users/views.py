@@ -1,3 +1,7 @@
+import hashlib
+import random
+import uuid
+
 from django.conf import settings
 from django.contrib.auth import authenticate
 from google.auth.transport import requests as google_requests
@@ -11,10 +15,37 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .models import User
 from .serializers import LoginSerializer, RegisterSerializer, UserSerializer
 
+_GUEST_ADJECTIVES = [
+    "Cosmic", "Neon", "Swift", "Silver", "Jade", "Blazing", "Crimson",
+    "Azure", "Golden", "Shadow", "Digital", "Phantom", "Turbo", "Electric",
+    "Midnight", "Crystal", "Hyper", "Stellar", "Nebula", "Prism",
+]
+
+_GUEST_NOUNS = [
+    "Falcon", "Panther", "Cipher", "Drifter", "Voyager", "Nomad",
+    "Pioneer", "Comet", "Spark", "Titan", "Oracle", "Vector", "Surge",
+    "Drift", "Beacon", "Axiom", "Vertex", "Flux", "Quasar", "Zenith",
+]
+
 
 def _tokens(user):
     refresh = RefreshToken.for_user(user)
     return {"access": str(refresh.access_token), "refresh": str(refresh)}
+
+
+def _guest_username():
+    adj = random.choice(_GUEST_ADJECTIVES)
+    noun = random.choice(_GUEST_NOUNS)
+    num = random.randint(10, 99)
+    return f"{adj}{noun}{num}"
+
+
+def _ip_hash(request):
+    ip = (
+        request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip()
+        or request.META.get("REMOTE_ADDR", "unknown")
+    )
+    return hashlib.sha256(f"{ip}:{settings.SECRET_KEY}".encode()).hexdigest()
 
 
 class RegisterView(APIView):
@@ -80,6 +111,49 @@ class GoogleAuthView(APIView):
             User.objects.filter(pk=user.pk).update(avatar_url=avatar)
 
         return Response({**_tokens(user), "created": created})
+
+
+class GuestSessionView(APIView):
+    """
+    POST /api/auth/guest/
+
+    Creates or retrieves a guest account tied to the caller's IP address.
+    One guest account per IP — repeated calls from the same IP return the
+    same JWT tokens so the guest doesn't lose their uploads.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        ip_hash = _ip_hash(request)
+
+        # Return existing guest account for this IP
+        existing = User.objects.filter(guest_ip_hash=ip_hash).first()
+        if existing:
+            return Response({**_tokens(existing), "username": existing.username, "avatar_url": existing.avatar_url})
+
+        # Pick a unique creative username
+        username = _guest_username()
+        for _ in range(20):
+            if not User.objects.filter(username=username).exists():
+                break
+            username = _guest_username()
+        else:
+            username = f"Guest{uuid.uuid4().hex[:8]}"
+
+        avatar_url = f"https://api.dicebear.com/7.x/bottts-neutral/svg?seed={username}&scale=90"
+
+        user = User.objects.create_user(
+            username=username,
+            password=None,
+            is_guest=True,
+            guest_ip_hash=ip_hash,
+            avatar_url=avatar_url,
+        )
+
+        return Response(
+            {**_tokens(user), "username": username, "avatar_url": avatar_url},
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class MeView(APIView):

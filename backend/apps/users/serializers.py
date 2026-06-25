@@ -21,5 +21,5 @@ class LoginSerializer(serializers.Serializer):
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ("id", "username", "email", "country", "avatar_url")
-        read_only_fields = ("id",)
+        fields = ("id", "username", "email", "country", "avatar_url", "is_guest")
+        read_only_fields = ("id", "is_guest")
