@@ -5,7 +5,7 @@ import { useAuth } from "../contexts/AuthContext";
 const CDN = import.meta.env.VITE_CDN_DOMAIN ? `https://${import.meta.env.VITE_CDN_DOMAIN}` : "";
 
 export default function Navbar({ onUpload }: { onUpload: () => void }) {
-  const { user, logout } = useAuth();
+  const { user, isGuest, logout } = useAuth();
   const navigate = useNavigate();
   const [dark, setDark] = useState(
     document.documentElement.dataset.theme === "dark"
@@ -37,7 +37,7 @@ export default function Navbar({ onUpload }: { onUpload: () => void }) {
         zIndex: 10,
       }}
     >
-      {/* Logo */}
+      {/* Logo + nav links */}
       <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
         <button
           onClick={() => navigate(user ? "/" : "/login")}
@@ -57,20 +57,12 @@ export default function Navbar({ onUpload }: { onUpload: () => void }) {
           )}
         </button>
 
-        {/* Nav links */}
         {user && (
           <div style={{ display: "flex", gap: "0.25rem" }}>
-            <NavLink
-              to="/"
-              end
-              style={({ isActive }) => navLinkStyle(isActive)}
-            >
+            <NavLink to="/" end style={({ isActive }) => navLinkStyle(isActive)} data-tutorial="my-uploads">
               My Uploads
             </NavLink>
-            <NavLink
-              to="/explore"
-              style={({ isActive }) => navLinkStyle(isActive)}
-            >
+            <NavLink to="/explore" style={({ isActive }) => navLinkStyle(isActive)} data-tutorial="explore">
               Explore
             </NavLink>
           </div>
@@ -93,6 +85,7 @@ export default function Navbar({ onUpload }: { onUpload: () => void }) {
         {user ? (
           <>
             <button
+              data-tutorial="upload"
               onClick={onUpload}
               style={{
                 backgroundColor: "var(--amber)", color: "#fff",
@@ -102,26 +95,52 @@ export default function Navbar({ onUpload }: { onUpload: () => void }) {
             >
               + Upload
             </button>
+
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
               {user.avatar_url && (
                 <img
                   src={user.avatar_url}
                   alt={user.username}
-                  style={{ width: "30px", height: "30px", borderRadius: "50%", objectFit: "cover" }}
+                  style={{ width: "30px", height: "30px", borderRadius: "50%", objectFit: "cover", backgroundColor: "var(--border)" }}
                 />
               )}
-              <span style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>{user.username}</span>
+              <div style={{ display: "flex", flexDirection: "column", gap: "1px" }}>
+                <span style={{ color: "var(--text-muted)", fontSize: "0.85rem", lineHeight: 1 }}>{user.username}</span>
+                {isGuest && (
+                  <span style={{
+                    fontSize: "0.6rem", color: "var(--amber)",
+                    fontFamily: "monospace", letterSpacing: "0.06em", textTransform: "uppercase",
+                    lineHeight: 1,
+                  }}>
+                    guest
+                  </span>
+                )}
+              </div>
             </div>
-            <button
-              onClick={handleLogout}
-              style={{
-                background: "none", border: "1px solid var(--border)",
-                borderRadius: "6px", padding: "0.4rem 0.75rem", cursor: "pointer",
-                color: "var(--text-muted)", fontSize: "0.85rem",
-              }}
-            >
-              Logout
-            </button>
+
+            {isGuest ? (
+              <button
+                onClick={() => navigate("/login")}
+                style={{
+                  backgroundColor: "var(--amber)", color: "#fff",
+                  border: "none", borderRadius: "6px",
+                  padding: "0.4rem 0.9rem", cursor: "pointer", fontSize: "0.82rem", fontWeight: 600,
+                }}
+              >
+                Create Account
+              </button>
+            ) : (
+              <button
+                onClick={handleLogout}
+                style={{
+                  background: "none", border: "1px solid var(--border)",
+                  borderRadius: "6px", padding: "0.4rem 0.75rem", cursor: "pointer",
+                  color: "var(--text-muted)", fontSize: "0.85rem",
+                }}
+              >
+                Logout
+              </button>
+            )}
           </>
         ) : (
           <button

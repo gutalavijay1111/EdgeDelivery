@@ -4,6 +4,7 @@ import { getMe, type UserProfile } from "../api/auth";
 interface AuthCtx {
   token: string | null;
   user: UserProfile | null;
+  isGuest: boolean;
   login: (access: string, refresh: string) => void;
   logout: () => void;
 }
@@ -33,7 +34,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [token]);
 
-  return <Ctx.Provider value={{ token, user, login, logout }}>{children}</Ctx.Provider>;
+  return (
+    <Ctx.Provider value={{ token, user, isGuest: user?.is_guest ?? false, login, logout }}>
+      {children}
+    </Ctx.Provider>
+  );
 }
 
 export const useAuth = () => useContext(Ctx);

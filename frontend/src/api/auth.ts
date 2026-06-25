@@ -2,7 +2,7 @@ import { api } from "./client";
 
 export interface TokenPair { access: string; refresh: string }
 export interface UserProfile {
-  id: number; username: string; email: string; country: string; avatar_url: string;
+  id: number; username: string; email: string; country: string; avatar_url: string; is_guest: boolean;
 }
 
 export const register = (data: {
@@ -20,3 +20,6 @@ export const getMe = () =>
 
 export const updateMe = (data: Partial<UserProfile>) =>
   api.patch<UserProfile>("/api/auth/me/", data).then((r) => r.data);
+
+export const guestLogin = () =>
+  api.post<TokenPair & { username: string; avatar_url: string }>("/api/auth/guest/").then((r) => r.data);

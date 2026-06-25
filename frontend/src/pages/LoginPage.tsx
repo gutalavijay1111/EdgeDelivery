@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { GoogleLogin } from "@react-oauth/google";
-import { login, register, googleAuth } from "../api/auth";
+import { login, register, googleAuth, guestLogin } from "../api/auth";
 import { useAuth } from "../contexts/AuthContext";
 
 type Tab = "login" | "register";
@@ -25,6 +25,7 @@ export default function LoginPage() {
   const [form, setForm] = useState({ username: "", email: "", password: "", country: "US" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [guestLoading, setGuestLoading] = useState(false);
   const { login: setAuth } = useAuth();
   const navigate = useNavigate();
 
@@ -60,6 +61,20 @@ export default function LoginPage() {
     }
   };
 
+  const handleGuest = async () => {
+    setGuestLoading(true);
+    setError("");
+    try {
+      const tokens = await guestLogin();
+      setAuth(tokens.access, tokens.refresh);
+      navigate("/");
+    } catch {
+      setError("Could not start guest session. Please try again.");
+    } finally {
+      setGuestLoading(false);
+    }
+  };
+
   return (
     <div
       className="animate-fade-in"
@@ -75,9 +90,50 @@ export default function LoginPage() {
           borderRadius: "12px", padding: "2rem", boxShadow: "var(--shadow-lg)",
         }}
       >
-        <h1 style={{ fontFamily: "Bebas Neue", fontSize: "2rem", color: "var(--text)", marginBottom: "1.5rem" }}>
+        <h1 style={{ fontFamily: "Bebas Neue", fontSize: "2rem", color: "var(--text)", marginBottom: "0.25rem" }}>
           EdgeDelivery
         </h1>
+        <p style={{ color: "var(--text-muted)", fontSize: "0.82rem", marginBottom: "1.5rem" }}>
+          AI-generated posters • Real-time CDN metrics
+        </p>
+
+        {/* Guest CTA */}
+        <button
+          onClick={handleGuest}
+          disabled={guestLoading}
+          style={{
+            width: "100%", padding: "0.7rem",
+            backgroundColor: "transparent",
+            border: "1.5px dashed var(--amber)",
+            borderRadius: "8px", cursor: guestLoading ? "wait" : "pointer",
+            color: "var(--amber)", fontFamily: "DM Sans", fontSize: "0.9rem",
+            fontWeight: 600, marginBottom: "1.5rem",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem",
+            transition: "background-color 0.15s",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "rgba(221,161,94,0.08)")}
+          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+        >
+          {guestLoading ? (
+            <>
+              <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid var(--amber)", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
+              Creating your guest session…
+            </>
+          ) : (
+            <>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M8 1.5C4.41 1.5 1.5 4.41 1.5 8S4.41 14.5 8 14.5 14.5 11.59 14.5 8 11.59 1.5 8 1.5zm0 2a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm0 9c-2 0-3.75-1.02-4.75-2.56C3.27 8.63 6.5 7.75 8 7.75s4.73.88 4.75 2.19C11.75 11.48 10 12.5 8 12.5z" fill="currentColor" />
+              </svg>
+              Try as Guest — no account needed
+            </>
+          )}
+        </button>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1.25rem" }}>
+          <div style={{ flex: 1, height: "1px", backgroundColor: "var(--border)" }} />
+          <span style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>or sign in</span>
+          <div style={{ flex: 1, height: "1px", backgroundColor: "var(--border)" }} />
+        </div>
 
         {/* Tabs */}
         <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem" }}>
