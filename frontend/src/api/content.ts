@@ -43,6 +43,9 @@ export const getContentStatus = (content_id: string) =>
 export const getMyContent = () =>
   api.get<ContentItem[]>("/api/content/my/").then((r) => r.data);
 
+export const deleteContent = (content_id: string) =>
+  api.delete(`/api/content/${content_id}/`);
+
 export const fetchFromExternal = (params: {
   country: string;
   source: "url" | "unsplash";

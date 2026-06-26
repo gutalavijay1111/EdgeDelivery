@@ -292,3 +292,31 @@ class ContentStreamView(View):
         response["Cache-Control"] = "no-cache"
         response["X-Accel-Buffering"] = "no"
         return response
+
+
+class DeleteContentView(APIView):
+    """
+    DELETE /api/content/<uuid>/
+
+    Deletes the Content record and all associated S3 objects (raw upload +
+    processed thumbnail + background).  Only the owner can delete.
+    """
+
+    def delete(self, request, content_id):
+        content = get_object_or_404(Content, id=content_id, uploaded_by=request.user)
+        s3 = boto3.client("s3", region_name=settings.AWS_REGION)
+        keys = [k for k in [
+            content.raw_s3_key,
+            f"processed/{content_id}/thumbnail.jpg",
+            f"processed/{content_id}/background.jpg",
+        ] if k]
+        if keys:
+            try:
+                s3.delete_objects(
+                    Bucket=settings.AWS_S3_BUCKET,
+                    Delete={"Objects": [{"Key": k} for k in keys], "Quiet": True},
+                )
+            except Exception:
+                logger.warning("S3 delete failed for content %s", content_id, exc_info=True)
+        content.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
